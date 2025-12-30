@@ -6,6 +6,8 @@ import (
 	"os"
 	"time"
 
+	fs "mend/fstree"
+
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -36,7 +38,7 @@ this data in msg when returned to the update func is used to update the model
 
 type model struct {
 	width int
-	tree  *FsTreeImpl
+	tree  *fs.FsTreeImpl
 	// spinner needs to be state as I need to update the spinner on
 	// each tick in update func
 	spinner spinner.Model
@@ -61,7 +63,7 @@ func createModel() model {
 // these need to be on the "model" ( duck typing "implements" interface )
 
 type treeLoadedMsg struct {
-	tree *FsTreeImpl
+	tree *fs.FsTreeImpl
 }
 
 func loadTreeCmd() tea.Msg {
@@ -72,7 +74,7 @@ func loadTreeCmd() tea.Msg {
 		fmt.Println("Error getting cwd:", err)
 		os.Exit(1)
 	}
-	return treeLoadedMsg{tree: NewFsTree(cwd)}
+	return treeLoadedMsg{tree: fs.NewFsTree(cwd)}
 }
 
 func (m model) Init() tea.Cmd {

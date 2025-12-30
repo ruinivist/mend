@@ -5,7 +5,7 @@ few good uses of ae ayee in my opinion
 - ruinivist, 30Dec25
 */
 
-package main
+package fstree
 
 import (
 	"path/filepath"

@@ -5,10 +5,11 @@ It is initialised at startup and used for state changes in UI and later persiste
 - ruinivist, 30Dec25
 */
 
-package main
+package fstree
 
 import (
 	"errors"
+	"mend/utils"
 	"path/filepath"
 )
 
@@ -97,7 +98,7 @@ func (t *FsTreeImpl) DeleteNode(node *FsNode) error {
 		return errors.New("node to delete must have a parent")
 	}
 
-	parent.children = RemoveFromSlice(parent.children, node)
+	parent.children = utils.RemoveFromSlice(parent.children, node)
 	return nil
 }
 
