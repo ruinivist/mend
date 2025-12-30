@@ -38,21 +38,11 @@ func (n *FsNode) FileName() string {
 }
 
 // ==================== FsNode definition ====================
-
-// ==================== FsTree definition ====================
-type FsTree interface {
-	CreateNode(parent *FsNode, name string, nodeType FsNodeType) error
-	DeleteNode(node *FsNode) error
-	ToggleExpand(node *FsNode) error
-}
-
-// reminder: a bit redundant but I this above shows what funcs are there at a glace
-// so I still like to use this pattern ( 30Dec25)
-type FsTreeImpl struct {
+type FsTree struct {
 	root *FsNode
 }
 
-func NewFsTree(rootPath string) *FsTreeImpl {
+func NewFsTree(rootPath string) *FsTree {
 	root := &FsNode{
 		nodeType: FolderNode,
 		path:     rootPath,
@@ -61,12 +51,12 @@ func NewFsTree(rootPath string) *FsTreeImpl {
 	}
 	walkFileSystemAndBuildTree(rootPath, root)
 
-	return &FsTreeImpl{
+	return &FsTree{
 		root: root,
 	}
 }
 
-func (t *FsTreeImpl) CreateNode(parent *FsNode, name string, nodeType FsNodeType) error {
+func (t *FsTree) CreateNode(parent *FsNode, name string, nodeType FsNodeType) error {
 	if parent == nil {
 		return errors.New("parent node cannot be nil")
 	}
@@ -89,7 +79,7 @@ func (t *FsTreeImpl) CreateNode(parent *FsNode, name string, nodeType FsNodeType
 	return nil
 }
 
-func (t *FsTreeImpl) DeleteNode(node *FsNode) error {
+func (t *FsTree) DeleteNode(node *FsNode) error {
 	if node == nil {
 		return errors.New("node to delete cannot be nil")
 	}
@@ -103,7 +93,7 @@ func (t *FsTreeImpl) DeleteNode(node *FsNode) error {
 }
 
 // ToggleExpand toggles the expanded state of a node
-func (t *FsTreeImpl) ToggleExpand(node *FsNode) error {
+func (t *FsTree) ToggleExpand(node *FsNode) error {
 	if node == nil {
 		return errors.New("node cannot be nil")
 	}
@@ -114,5 +104,3 @@ func (t *FsTreeImpl) ToggleExpand(node *FsNode) error {
 	node.expanded = !node.expanded
 	return nil
 }
-
-// ==================== FsTree definition ====================

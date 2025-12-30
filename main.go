@@ -38,7 +38,7 @@ this data in msg when returned to the update func is used to update the model
 
 type model struct {
 	width int
-	tree  *fs.FsTreeImpl
+	tree  *fs.FsTree
 	// spinner needs to be state as I need to update the spinner on
 	// each tick in update func
 	spinner spinner.Model
@@ -63,7 +63,7 @@ func createModel() model {
 // these need to be on the "model" ( duck typing "implements" interface )
 
 type treeLoadedMsg struct {
-	tree *fs.FsTreeImpl
+	tree *fs.FsTree
 }
 
 func loadTreeCmd() tea.Msg {
