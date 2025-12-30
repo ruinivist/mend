@@ -52,7 +52,7 @@ func createModel() model {
 	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
 
 	return model{
-		width:   20, // char count
+		width:   30, // char count
 		tree:    nil,
 		spinner: s,
 		loading: true,
@@ -67,7 +67,7 @@ type treeLoadedMsg struct {
 }
 
 func loadTreeCmd() tea.Msg {
-	time.Sleep(3 * time.Second) // delay sim
+	time.Sleep(1 * time.Second) // delay sim
 
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -107,14 +107,16 @@ func (m model) View() string {
 
 	left := lipgloss.NewStyle().
 		Width(m.width).
-		Render("section1")
+		Render(m.tree.Render())
 
 	right := lipgloss.NewStyle().
 		Render("section2")
 
+	leftHeight := lipgloss.Height(left)
+
 	divider := lipgloss.NewStyle().
 		Width(1).
-		Height(5).
+		Height(leftHeight).
 		Background(styles.Primary).
 		Render("") // everything is a string in tui
 

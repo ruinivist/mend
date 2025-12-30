@@ -11,6 +11,7 @@ import (
 	"errors"
 	"mend/utils"
 	"path/filepath"
+	"strings"
 )
 
 // enums for node types
@@ -72,7 +73,7 @@ func (t *FsTree) CreateNode(parent *FsNode, name string, nodeType FsNodeType) er
 		path:     filepath.Join(parent.path, name),
 		children: make([]*FsNode, 0),
 		parent:   parent,
-		expanded: false,
+		expanded: true,
 	}
 
 	parent.children = append(parent.children, newNode)
@@ -92,7 +93,6 @@ func (t *FsTree) DeleteNode(node *FsNode) error {
 	return nil
 }
 
-// ToggleExpand toggles the expanded state of a node
 func (t *FsTree) ToggleExpand(node *FsNode) error {
 	if node == nil {
 		return errors.New("node cannot be nil")
@@ -103,4 +103,31 @@ func (t *FsTree) ToggleExpand(node *FsNode) error {
 
 	node.expanded = !node.expanded
 	return nil
+}
+
+func (t *FsTree) Render() string {
+	builder := &strings.Builder{}
+	t.renderNode(t.root, 0, builder)
+	return builder.String()
+}
+
+func (t *FsTree) renderNode(node *FsNode, depth int, builder *strings.Builder) {
+	if node == nil {
+		return
+	}
+
+	indent := strings.Repeat("  ", depth)
+	icon := "-"
+	if node.nodeType == FolderNode {
+		icon = "> "
+	}
+
+	line := indent + icon + " " + node.FileName() + "\n"
+	builder.WriteString(line)
+
+	if node.expanded {
+		for _, child := range node.children {
+			t.renderNode(child, depth+1, builder)
+		}
+	}
 }

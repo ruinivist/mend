@@ -28,6 +28,11 @@ func walkFileSystemAndBuildTree(rootPath string, node *FsNode) error {
 	}
 
 	for _, entry := range entries {
+		// dot folders and files skipped
+		if len(entry.Name()) > 0 && entry.Name()[0] == '.' {
+			continue
+		}
+
 		childPath := filepath.Join(rootPath, entry.Name())
 
 		var nodeType FsNodeType
@@ -42,7 +47,7 @@ func walkFileSystemAndBuildTree(rootPath string, node *FsNode) error {
 			path:     childPath,
 			children: make([]*FsNode, 0),
 			parent:   node,
-			expanded: false,
+			expanded: true,
 		}
 
 		node.children = append(node.children, childNode)
