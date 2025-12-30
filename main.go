@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"mend/styles"
 	"os"
+	"time"
 
+	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -27,32 +29,69 @@ notes:
 I anyways need to create the model struct even if blank
 - Init func is for bubbletea to call once at start so both are needed
 - all widths and heights are character count based
+- async updates are via cmds (tea.Cmd ) that are no arg funcs that return
+a tea.Msg ( that is basically a struct and hence has the data needed )
+this data in msg when returned to the update func is used to update the model
 */
 
 type model struct {
 	width int
-	quit  bool
+	tree  *FsTreeImpl
+	// spinner needs to be state as I need to update the spinner on
+	// each tick in update func
+	spinner spinner.Model
+	loading bool
 }
 
 // initial model state
 func createModel() model {
+	s := spinner.New()
+	s.Spinner = spinner.Dot
+	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
+
 	return model{
-		width: 20, // char count
+		width:   20, // char count
+		tree:    nil,
+		spinner: s,
+		loading: true,
 	}
 }
 
 // =================== bubbletea ui fns ===================
 // these need to be on the "model" ( duck typing "implements" interface )
+
+type treeLoadedMsg struct {
+	tree *FsTreeImpl
+}
+
+func loadTreeCmd() tea.Msg {
+	time.Sleep(3 * time.Second) // delay sim
+
+	cwd, err := os.Getwd()
+	if err != nil {
+		fmt.Println("Error getting cwd:", err)
+		os.Exit(1)
+	}
+	return treeLoadedMsg{tree: NewFsTree(cwd)}
+}
+
 func (m model) Init() tea.Cmd {
-	return nil
+	return tea.Batch(m.spinner.Tick, loadTreeCmd)
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case treeLoadedMsg:
+		m.tree = msg.tree
+		m.loading = false
+		return m, nil
+	case spinner.TickMsg:
+		var cmd tea.Cmd
+		m.spinner, cmd = m.spinner.Update(msg)
+		return m, cmd
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "q", "ctrl+c":
-			m.quit = true
 			return m, tea.Quit
 		}
 	}
@@ -60,6 +99,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) View() string {
+	if m.loading {
+		return fmt.Sprintf("%s Loading files...", m.spinner.View())
+	}
+
 	left := lipgloss.NewStyle().
 		Width(m.width).
 		Render("section1")
