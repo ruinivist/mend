@@ -52,13 +52,16 @@ type FsTreeImpl struct {
 }
 
 func NewFsTree(rootPath string) *FsTreeImpl {
+	root := &FsNode{
+		nodeType: FolderNode,
+		path:     rootPath,
+		children: make([]*FsNode, 0),
+		expanded: true,
+	}
+	walkFileSystemAndBuildTree(rootPath, root)
+
 	return &FsTreeImpl{
-		root: &FsNode{
-			nodeType: FolderNode,
-			path:     rootPath,
-			children: make([]*FsNode, 0),
-			expanded: true,
-		},
+		root: root,
 	}
 }
 
