@@ -105,7 +105,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.spinner, cmd = m.spinner.Update(msg)
 		return m, cmd
 	case tea.MouseMsg:
-		if msg.Type == tea.MouseLeft {
+		if msg.Button == tea.MouseButtonLeft {
 			// within file tree
 			if msg.X < m.width {
 				if err := m.tree.SelectNodeAtLine(msg.Y); err == nil {
