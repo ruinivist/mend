@@ -44,9 +44,10 @@ type model struct {
 	tree           *fs.FsTree
 	// spinner needs to be state as I need to update the spinner on
 	// each tick in update func
-	spinner  spinner.Model
-	loading  bool
-	viewport viewport.Model
+	spinner   spinner.Model
+	loading   bool
+	viewport  viewport.Model
+	hoverLine int // track which line is being hovered
 }
 
 // initial model state
@@ -63,6 +64,7 @@ func createModel() model {
 		spinner:        s,
 		loading:        true,
 		viewport:       viewport.New(0, 0),
+		hoverLine:      -1, // no hover initially
 	}
 }
 
@@ -105,6 +107,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.spinner, cmd = m.spinner.Update(msg)
 		return m, cmd
 	case tea.MouseMsg:
+		// track hover for all mouse events within file tree
+		if msg.X < m.width {
+			m.hoverLine = msg.Y
+		} else {
+			m.hoverLine = -1
+		}
+
 		if msg.Button == tea.MouseButtonLeft {
 			// within file tree
 			if msg.X < m.width {
@@ -151,7 +160,7 @@ func (m model) View() string {
 
 	left := lipgloss.NewStyle().
 		Width(m.width).
-		Render(m.tree.Render())
+		Render(m.tree.Render(m.hoverLine))
 
 	right := lipgloss.NewStyle().
 		Width(m.terminalWidth - m.width - 1).
@@ -173,7 +182,7 @@ func main() {
 	p := tea.NewProgram(
 		createModel(),
 		tea.WithAltScreen(), // full screen tui
-		tea.WithMouseCellMotion(),
+		tea.WithMouseAllMotion(),
 	)
 	if _, err := p.Run(); err != nil {
 		fmt.Printf("Error: %v", err)

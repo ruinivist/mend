@@ -182,13 +182,14 @@ func (t *FsTree) GetSelectedContent() (string, error) {
 	return string(contentBytes), nil
 }
 
-func (t *FsTree) Render() string {
+func (t *FsTree) Render(hoverLine int) string {
 	builder := &strings.Builder{}
-	t.renderNode(t.root, 0, builder)
+	lineCounter := 0
+	t.renderNode(t.root, 0, builder, hoverLine, &lineCounter)
 	return builder.String()
 }
 
-func (t *FsTree) renderNode(node *FsNode, depth int, builder *strings.Builder) {
+func (t *FsTree) renderNode(node *FsNode, depth int, builder *strings.Builder, hoverLine int, currentLine *int) {
 	if node == nil {
 		return
 	}
@@ -209,18 +210,24 @@ func (t *FsTree) renderNode(node *FsNode, depth int, builder *strings.Builder) {
 		icon = lipgloss.NewStyle().Faint(true).Render(prevIndent + icon + indent)
 	}
 
-	// highlight if selected
+	// highlight if selected or hovered
 	fileName := node.FileName()
-	if node == t.selectedNode() {
+	isSelected := node == t.selectedNode()
+	isHovered := hoverLine >= 0 && *currentLine == hoverLine
+
+	if isSelected {
 		fileName = lipgloss.NewStyle().Foreground(styles.Highlight).Bold(true).Render(fileName)
+	} else if isHovered {
+		fileName = lipgloss.NewStyle().Foreground(styles.HoverHighlight).Render(fileName)
 	}
 
 	line := icon + " " + fileName + "\n"
 	builder.WriteString(line)
+	*currentLine++
 
 	if node.expanded {
 		for _, child := range node.children {
-			t.renderNode(child, depth+1, builder)
+			t.renderNode(child, depth+1, builder, hoverLine, currentLine)
 		}
 	}
 }
