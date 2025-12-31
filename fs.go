@@ -57,3 +57,67 @@ func walkFileSystemAndBuildTree(rootPath string, node *FsNode) error {
 
 	return nil
 }
+
+func createFile(path string, content []byte) error {
+	if path == "" {
+		return errors.New("file path cannot be empty")
+	}
+
+	if _, err := os.Stat(path); err == nil {
+		return errors.New("file already exists")
+	}
+
+	return os.WriteFile(path, content, 0644)
+}
+
+func createFolder(path string) error {
+	if path == "" {
+		return errors.New("folder path cannot be empty")
+	}
+
+	if _, err := os.Stat(path); err == nil {
+		return errors.New("folder already exists")
+	}
+
+	return os.Mkdir(path, 0755)
+}
+
+func deleteFile(path string) error {
+	if path == "" {
+		return errors.New("file path cannot be empty")
+	}
+
+	info, err := os.Stat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return errors.New("file does not exist")
+		}
+		return err
+	}
+
+	if info.IsDir() {
+		return errors.New("path is a directory, not a file")
+	}
+
+	return os.Remove(path)
+}
+
+func deleteFolder(path string) error {
+	if path == "" {
+		return errors.New("folder path cannot be empty")
+	}
+
+	info, err := os.Stat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return errors.New("folder does not exist")
+		}
+		return err
+	}
+
+	if !info.IsDir() {
+		return errors.New("path is a file, not a directory")
+	}
+
+	return os.RemoveAll(path)
+}
