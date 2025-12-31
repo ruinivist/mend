@@ -37,7 +37,8 @@ func TestWalkFileSystemAndBuildTree(t *testing.T) {
 			expanded: true,
 		}
 
-		err := walkFileSystemAndBuildTree(tmpDir, root)
+		flatTree := make([]*FsNode, 0)
+		err := walkFileSystemAndBuildTree(tmpDir, root, &flatTree)
 		if err != nil {
 			t.Fatalf("walkFileSystemAndBuildTree() error = %v", err)
 		}
@@ -73,7 +74,7 @@ func TestWalkFileSystemAndBuildTree(t *testing.T) {
 		}
 		if folderCount != 2 {
 			t.Errorf("folder count = %d, want 2", folderCount)
-		}
+		} // Update viewport with selected file content
 
 		// Verify nested structure
 		if folder1 == nil {
@@ -92,7 +93,8 @@ func TestWalkFileSystemAndBuildTree(t *testing.T) {
 
 	t.Run("error when node is nil", func(t *testing.T) {
 		tmpDir := t.TempDir()
-		err := walkFileSystemAndBuildTree(tmpDir, nil)
+		flatTree := make([]*FsNode, 0)
+		err := walkFileSystemAndBuildTree(tmpDir, nil, &flatTree)
 		if err == nil {
 			t.Fatal("walkFileSystemAndBuildTree() with nil node should return error")
 		}
@@ -110,7 +112,8 @@ func TestWalkFileSystemAndBuildTree(t *testing.T) {
 			expanded: true,
 		}
 
-		err := walkFileSystemAndBuildTree(tmpDir, root)
+		flatTree := make([]*FsNode, 0)
+		err := walkFileSystemAndBuildTree(tmpDir, root, &flatTree)
 		if err == nil {
 			t.Fatal("walkFileSystemAndBuildTree() with existing children should return error")
 		}
@@ -127,7 +130,8 @@ func TestWalkFileSystemAndBuildTree(t *testing.T) {
 			expanded: true,
 		}
 
-		err := walkFileSystemAndBuildTree("/nonexistent/path", root)
+		flatTree := make([]*FsNode, 0)
+		err := walkFileSystemAndBuildTree("/nonexistent/path", root, &flatTree)
 		if err == nil {
 			t.Fatal("walkFileSystemAndBuildTree() with nonexistent path should return error")
 		}
@@ -142,7 +146,8 @@ func TestWalkFileSystemAndBuildTree(t *testing.T) {
 			expanded: true,
 		}
 
-		err := walkFileSystemAndBuildTree(tmpDir, root)
+		flatTree := make([]*FsNode, 0)
+		err := walkFileSystemAndBuildTree(tmpDir, root, &flatTree)
 		if err != nil {
 			t.Fatalf("walkFileSystemAndBuildTree() error = %v", err)
 		}

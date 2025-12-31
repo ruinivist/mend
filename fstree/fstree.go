@@ -45,7 +45,15 @@ func (n *FsNode) FileName() string {
 // ==================== FsNode definition ====================
 type FsTree struct {
 	root     *FsNode
-	selected *FsNode // currently selected node
+	selected int
+	lines    []*FsNode // flattened view of nodes
+}
+
+func (t *FsTree) selectedNode() *FsNode {
+	if t.selected <= 0 || t.selected >= len(t.lines) {
+		return nil
+	}
+	return t.lines[t.selected]
 }
 
 func NewFsTree(rootPath string) *FsTree {
@@ -55,16 +63,19 @@ func NewFsTree(rootPath string) *FsTree {
 		children: make([]*FsNode, 0),
 		expanded: true,
 	}
-	walkFileSystemAndBuildTree(rootPath, root)
+	flatTree := make([]*FsNode, 0)
+	walkFileSystemAndBuildTree(rootPath, root, &flatTree)
 
 	if len(root.children) > 0 {
 		return &FsTree{
 			root:     root,
-			selected: root.children[0],
+			selected: 1, // first child
+			lines:    flatTree,
 		}
 	}
 	return &FsTree{
-		root: root,
+		root:  root,
+		lines: flatTree,
 	}
 }
 
@@ -116,96 +127,55 @@ func (t *FsTree) ToggleExpand(node *FsNode) error {
 	return nil
 }
 
-// At this point I think there HAS to be a simpler way to do this
-// but since I'm going to refactor it some day let's leave this
-// as it is
 func (t *FsTree) move(delta int) error {
-	if t.selected == nil {
+	if t.selectedNode() == nil {
 		return errors.New("no node is currently selected")
 	}
 	if delta != -1 && delta != 1 {
 		return errors.New("delta must be either -1 (up) or 1 (down)")
 	}
 
-	// base case: if it's a folder and expanded and going down
-	if delta == 1 && t.selected.nodeType == FolderNode && t.selected.expanded && len(t.selected.children) > 0 {
-		t.selected = t.selected.children[0]
-		return nil
+	newIndex := t.selected + delta
+	if newIndex < 1 || newIndex >= len(t.lines) {
+		return nil // noop
 	}
-	// base case: if it's the first element of a folder and going up
-	if delta == -1 && t.selected.parent != t.root {
-		parent := t.selected.parent
-		if len(parent.children) > 0 && parent.children[0] == t.selected {
-			t.selected = parent
-			return nil
-		}
-	}
-
-	// same level sibling move
-	// the idea is really simple for now:
-	// - go up the parent and find the sibling in the direction
-	//   - if no sibling go up again
-	// - if no parent stop
-	siblingFor := t.selected
-	for siblingFor.parent != nil {
-		parent := siblingFor.parent
-		// O(n) for now, though easy to obtimize with index tracking
-		nextIdx := -1
-		for idx, child := range parent.children {
-			if child == siblingFor {
-				nextIdx = idx + delta
-				break
-			}
-		}
-
-		if nextIdx >= 0 && nextIdx < len(parent.children) {
-			// found case
-			t.selected = parent.children[nextIdx]
-			break
-		}
-		// not found case, go up again
-		siblingFor = parent
-	}
-
-	// case: folder and I'm going up, I want to go as deep and last
-	if delta == -1 && t.selected.nodeType == FolderNode {
-		current := t.selected
-		for {
-			if len(current.children) == 0 || !current.expanded {
-				break
-			}
-			current = current.children[len(current.children)-1]
-		}
-		t.selected = current
-	}
+	t.selected = newIndex
 	return nil
 }
 
 func (t *FsTree) MoveUp() error   { return t.move(-1) }
 func (t *FsTree) MoveDown() error { return t.move(1) }
 
+func (t *FsTree) SelectNodeAtLine(line int) error {
+	if line < 0 || line >= len(t.lines) {
+		return errors.New("line number out of bounds")
+	}
+	t.selected = line
+	return nil
+}
+
 func (t *FsTree) ToggleSelectedExpand() error {
-	if t.selected == nil {
+	if t.selectedNode() == nil {
 		return errors.New("no node is currently selected")
 	}
-	if t.selected.nodeType != FolderNode {
+	if t.selectedNode().nodeType != FolderNode {
 		return errors.New("only folder nodes can be expanded or collapsed")
 	}
 
-	t.ToggleExpand(t.selected)
+	t.ToggleExpand(t.selectedNode())
 	return nil
 }
 
 func (t *FsTree) GetSelectedContent() (string, error) {
-	if t.selected == nil {
+	if t.selectedNode() == nil {
 		return "", errors.New("no node is currently selected")
 	}
 
-	if t.selected.nodeType != FileNode {
+	if t.selectedNode().nodeType != FileNode {
 		return "", nil
 	}
 
-	contentBytes, err := os.ReadFile(t.selected.path)
+	contentBytes, err := os.ReadFile(t.selectedNode().path)
 	if err != nil {
 		return "", err
 	}
@@ -239,9 +209,9 @@ func (t *FsTree) renderNode(node *FsNode, depth int, builder *strings.Builder) {
 		icon = lipgloss.NewStyle().Faint(true).Render(prevIndent + icon + indent)
 	}
 
-	// Apply highlight if selected
+	// highlight if selected
 	fileName := node.FileName()
-	if node == t.selected {
+	if node == t.selectedNode() {
 		fileName = lipgloss.NewStyle().Foreground(styles.Highlight).Bold(true).Render(fileName)
 	}
 

@@ -104,6 +104,18 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var cmd tea.Cmd
 		m.spinner, cmd = m.spinner.Update(msg)
 		return m, cmd
+	case tea.MouseMsg:
+		if msg.Type == tea.MouseLeft {
+			// within file tree
+			if msg.X < m.width {
+				if err := m.tree.SelectNodeAtLine(msg.Y); err == nil {
+					content, err := m.tree.GetSelectedContent()
+					if err == nil {
+						m.viewport.SetContent(content)
+					}
+				}
+			}
+		}
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "q", "ctrl+c":
@@ -161,6 +173,7 @@ func main() {
 	p := tea.NewProgram(
 		createModel(),
 		tea.WithAltScreen(), // full screen tui
+		tea.WithMouseCellMotion(),
 	)
 	if _, err := p.Run(); err != nil {
 		fmt.Printf("Error: %v", err)
