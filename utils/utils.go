@@ -1,4 +1,4 @@
-package main
+package utils
 
 // Removes the first occurence from the slice. Worst case O(n)
 func RemoveFromSlice[T comparable](slice []T, item T) []T {

@@ -3,7 +3,7 @@ another test that is entirely ae ayee generated
 - ruinivist, 30Dec25
 */
 
-package main
+package fstree
 
 import (
 	"os"

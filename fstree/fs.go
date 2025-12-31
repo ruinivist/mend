@@ -6,7 +6,7 @@ fileopen
 - ruinivist, 30Dec25
 */
 
-package main
+package fstree
 
 import (
 	"errors"
