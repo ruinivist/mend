@@ -95,6 +95,18 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "q", "ctrl+c":
 			return m, tea.Quit
+		case "up", "k":
+			if err := m.tree.MoveUp(); err != nil {
+				fmt.Println("Error moving up:", err)
+			}
+		case "down", "j":
+			if err := m.tree.MoveDown(); err != nil {
+				fmt.Println("Error moving down:", err)
+			}
+		case "enter", " ":
+			if err := m.tree.ToggleSelectedExpand(); err != nil {
+				fmt.Println("Error toggling expand:", err)
+			}
 		}
 	}
 	return m, nil

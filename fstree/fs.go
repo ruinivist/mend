@@ -12,6 +12,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"sort"
 )
 
 func walkFileSystemAndBuildTree(rootPath string, node *FsNode) error {
@@ -59,6 +60,14 @@ func walkFileSystemAndBuildTree(rootPath string, node *FsNode) error {
 			}
 		}
 	}
+
+	// Sort children: files first, then folders
+	sort.Slice(node.children, func(i, j int) bool {
+		if node.children[i].nodeType == node.children[j].nodeType {
+			return node.children[i].FileName() < node.children[j].FileName()
+		}
+		return node.children[i].nodeType == FileNode
+	})
 
 	return nil
 }
