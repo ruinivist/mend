@@ -9,6 +9,7 @@ import (
 	fs "mend/fstree"
 
 	"github.com/charmbracelet/bubbles/spinner"
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -43,8 +44,9 @@ type model struct {
 	tree           *fs.FsTree
 	// spinner needs to be state as I need to update the spinner on
 	// each tick in update func
-	spinner spinner.Model
-	loading bool
+	spinner  spinner.Model
+	loading  bool
+	viewport viewport.Model
 }
 
 // initial model state
@@ -60,6 +62,7 @@ func createModel() model {
 		tree:           nil,
 		spinner:        s,
 		loading:        true,
+		viewport:       viewport.New(0, 0),
 	}
 }
 
@@ -90,6 +93,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.terminalWidth = msg.Width
 		m.terminalHeight = msg.Height
+		m.viewport.Width = msg.Width - m.width - 1
+		m.viewport.Height = msg.Height
 		return m, nil
 	case treeLoadedMsg:
 		m.tree = msg.tree
@@ -115,6 +120,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if err := m.tree.ToggleSelectedExpand(); err != nil {
 				fmt.Println("Error toggling expand:", err)
 			}
+		case "l", "L":
+			content, err := m.tree.GetSelectedContent()
+			if err != nil {
+				fmt.Println("Error getting selected content:", err)
+			} else {
+				m.viewport.SetContent(content)
+			}
 		}
 	}
 	return m, nil
@@ -130,7 +142,9 @@ func (m model) View() string {
 		Render(m.tree.Render())
 
 	right := lipgloss.NewStyle().
-		Render("section2")
+		Width(m.terminalWidth - m.width - 1).
+		Height(m.terminalHeight).
+		Render(m.viewport.View())
 
 	divider := lipgloss.NewStyle().
 		Width(1).
@@ -144,7 +158,10 @@ func (m model) View() string {
 // =================== bubbletea ui fns ===================
 
 func main() {
-	p := tea.NewProgram(createModel(), tea.WithAltScreen() /* <- full screen tui */)
+	p := tea.NewProgram(
+		createModel(),
+		tea.WithAltScreen(), // full screen tui
+	)
 	if _, err := p.Run(); err != nil {
 		fmt.Printf("Error: %v", err)
 		os.Exit(1)

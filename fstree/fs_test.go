@@ -57,9 +57,10 @@ func TestWalkFileSystemAndBuildTree(t *testing.T) {
 				t.Errorf("child %q parent pointer incorrect", child.FileName())
 			}
 
-			if child.nodeType == FileNode {
+			switch child.nodeType {
+			case FileNode:
 				fileCount++
-			} else if child.nodeType == FolderNode {
+			case FolderNode:
 				folderCount++
 				if child.FileName() == "folder1" {
 					folder1 = child
