@@ -24,3 +24,10 @@ var (
 		Width(1).
 		Background(Primary)
 )
+
+// ==================== icons ====================
+var (
+	VerticalLine   = "│"
+	ArrowDownIcon  = "⌄"
+	ArrowRightIcon = "›"
+)

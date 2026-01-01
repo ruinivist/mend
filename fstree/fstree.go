@@ -9,9 +9,12 @@ package fstree
 
 import (
 	"errors"
+	"mend/styles"
 	"mend/utils"
 	"path/filepath"
 	"strings"
+
+	"github.com/charmbracelet/lipgloss"
 )
 
 // enums for node types
@@ -116,13 +119,23 @@ func (t *FsTree) renderNode(node *FsNode, depth int, builder *strings.Builder) {
 		return
 	}
 
-	indent := strings.Repeat("  ", depth)
-	icon := "-"
-	if node.nodeType == FolderNode {
-		icon = "> "
+	indent := strings.Repeat(" ", depth)
+	prevIndent := strings.Repeat(" ", max(depth-1, 0))
+
+	var icon string
+	switch node.nodeType {
+	case FolderNode:
+		if node.expanded {
+			icon = indent + styles.ArrowDownIcon
+		} else {
+			icon = indent + styles.ArrowRightIcon
+		}
+	case FileNode:
+		icon = styles.VerticalLine
+		icon = lipgloss.NewStyle().Faint(true).Render(prevIndent + icon + indent)
 	}
 
-	line := indent + icon + " " + node.FileName() + "\n"
+	line := icon + " " + node.FileName() + "\n"
 	builder.WriteString(line)
 
 	if node.expanded {
