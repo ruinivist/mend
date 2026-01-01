@@ -37,8 +37,10 @@ this data in msg when returned to the update func is used to update the model
 */
 
 type model struct {
-	width int
-	tree  *fs.FsTree
+	width          int
+	terminalWidth  int
+	terminalHeight int
+	tree           *fs.FsTree
 	// spinner needs to be state as I need to update the spinner on
 	// each tick in update func
 	spinner spinner.Model
@@ -52,10 +54,12 @@ func createModel() model {
 	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
 
 	return model{
-		width:   30, // char count
-		tree:    nil,
-		spinner: s,
-		loading: true,
+		width:          30, // char count
+		terminalWidth:  0,
+		terminalHeight: 0,
+		tree:           nil,
+		spinner:        s,
+		loading:        true,
 	}
 }
 
@@ -83,6 +87,10 @@ func (m model) Init() tea.Cmd {
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.terminalWidth = msg.Width
+		m.terminalHeight = msg.Height
+		return m, nil
 	case treeLoadedMsg:
 		m.tree = msg.tree
 		m.loading = false
@@ -124,11 +132,9 @@ func (m model) View() string {
 	right := lipgloss.NewStyle().
 		Render("section2")
 
-	leftHeight := lipgloss.Height(left)
-
 	divider := lipgloss.NewStyle().
 		Width(1).
-		Height(leftHeight).
+		Height(m.terminalHeight).
 		Background(styles.Primary).
 		Render("") // everything is a string in tui
 
