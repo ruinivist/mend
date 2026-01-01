@@ -12,10 +12,9 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"sort"
 )
 
-func walkFileSystemAndBuildTree(rootPath string, node *FsNode) error {
+func walkFileSystemAndBuildTree(rootPath string, node *FsNode, flatTree *[]*FsNode) error {
 	if node == nil {
 		return errors.New("node cannot be nil")
 	}
@@ -28,46 +27,46 @@ func walkFileSystemAndBuildTree(rootPath string, node *FsNode) error {
 		return err
 	}
 
+	files := make([]os.DirEntry, 0)
+	folders := make([]os.DirEntry, 0)
+
 	for _, entry := range entries {
 		// dot folders and files skipped
 		if len(entry.Name()) > 0 && entry.Name()[0] == '.' {
 			continue
 		}
 
-		childPath := filepath.Join(rootPath, entry.Name())
-
-		var nodeType FsNodeType
 		if entry.IsDir() {
-			nodeType = FolderNode
+			folders = append(folders, entry)
 		} else {
-			nodeType = FileNode
-		}
-
-		childNode := &FsNode{
-			nodeType: nodeType,
-			path:     childPath,
-			children: make([]*FsNode, 0),
-			parent:   node,
-			expanded: true,
-		}
-
-		node.children = append(node.children, childNode)
-
-		// Recursively walk subdirectories
-		if entry.IsDir() {
-			if err := walkFileSystemAndBuildTree(childPath, childNode); err != nil {
-				return err
-			}
+			files = append(files, entry)
 		}
 	}
 
-	// Sort children: files first, then folders
-	sort.Slice(node.children, func(i, j int) bool {
-		if node.children[i].nodeType == node.children[j].nodeType {
-			return node.children[i].FileName() < node.children[j].FileName()
+	*flatTree = append(*flatTree, node) // add self
+	for _, file := range files {
+		newNode := &FsNode{
+			nodeType: FileNode,
+			path:     filepath.Join(rootPath, file.Name()),
+			children: make([]*FsNode, 0),
+			parent:   node,
+			expanded: false,
 		}
-		return node.children[i].nodeType == FileNode
-	})
+		node.children = append(node.children, newNode)
+		*flatTree = append(*flatTree, newNode)
+	}
+
+	for _, folder := range folders {
+		newNode := &FsNode{
+			nodeType: FolderNode,
+			path:     filepath.Join(rootPath, folder.Name()),
+			children: make([]*FsNode, 0),
+			parent:   node,
+			expanded: true, // all expanded by default
+		}
+		node.children = append(node.children, newNode)
+		walkFileSystemAndBuildTree(newNode.path, newNode, flatTree)
+	}
 
 	return nil
 }
