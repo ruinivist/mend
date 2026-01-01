@@ -11,6 +11,7 @@ import (
 	"errors"
 	"mend/styles"
 	"mend/utils"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -193,6 +194,22 @@ func (t *FsTree) ToggleSelectedExpand() error {
 
 	t.ToggleExpand(t.selected)
 	return nil
+}
+
+func (t *FsTree) GetSelectedContent() (string, error) {
+	if t.selected == nil {
+		return "", errors.New("no node is currently selected")
+	}
+
+	if t.selected.nodeType != FileNode {
+		return "", nil
+	}
+
+	contentBytes, err := os.ReadFile(t.selected.path)
+	if err != nil {
+		return "", err
+	}
+	return string(contentBytes), nil
 }
 
 func (t *FsTree) Render() string {
