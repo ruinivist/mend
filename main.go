@@ -159,6 +159,7 @@ func (m model) View() string {
 	tree := m.tree.View()
 	tree = lipgloss.NewStyle().
 		Border(lipgloss.NormalBorder()).
+		Height(m.terminalHeight).
 		Width(40).
 		Align(lipgloss.Left).
 		PaddingRight(2).
