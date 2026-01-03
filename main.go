@@ -43,6 +43,7 @@ type model struct {
 	noteView          *NoteView
 	isDragging        bool
 	isHoveringDivider bool
+	contentHeight     int
 }
 
 func NewModel(rootPath string) *model {
@@ -80,8 +81,8 @@ func (m *model) loadTreeCmd(path string) tea.Cmd {
 func (m *model) layout(width, height int) {
 	m.terminalWidth = width
 	m.terminalHeight = height
-
 	m.fsTreeWidth, m.noteViewWidth = calculateLayout(width, m.fsTreeWidth)
+	m.contentHeight = max(0, height-statusBarHeight)
 }
 
 func (m *model) Init() tea.Cmd {
@@ -99,13 +100,13 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.tree != nil {
 			_, cmd := m.tree.Update(tea.WindowSizeMsg{
 				Width:  m.fsTreeWidth,
-				Height: m.terminalHeight,
+				Height: m.contentHeight,
 			})
 			cmds = append(cmds, cmd)
 		}
 		_, cmd := m.noteView.Update(tea.WindowSizeMsg{
 			Width:  m.noteViewWidth,
-			Height: m.terminalHeight,
+			Height: m.contentHeight,
 		})
 		cmds = append(cmds, cmd)
 		return m, tea.Batch(cmds...)
@@ -114,7 +115,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.tree = msg.tree
 		m.loading = false
 		_, cmd := m.tree.Update(tea.WindowSizeMsg{
-			Height: m.terminalHeight,
+			Height: m.contentHeight,
 			Width:  m.fsTreeWidth,
 		})
 		return m, cmd
@@ -165,13 +166,13 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.tree != nil {
 					_, cmd := m.tree.Update(tea.WindowSizeMsg{
 						Width:  m.fsTreeWidth,
-						Height: m.terminalHeight,
+						Height: m.contentHeight,
 					})
 					cmds = append(cmds, cmd)
 				}
 				_, cmd := m.noteView.Update(tea.WindowSizeMsg{
 					Width:  m.noteViewWidth,
-					Height: m.terminalHeight,
+					Height: m.contentHeight,
 				})
 				cmds = append(cmds, cmd)
 				return m, tea.Batch(cmds...)
@@ -203,7 +204,7 @@ func (m model) View() string {
 
 	tree := m.tree.View()
 	tree = lipgloss.NewStyle().
-		Height(m.terminalHeight).
+		Height(m.contentHeight).
 		Width(m.fsTreeWidth).
 		Align(lipgloss.Left).
 		PaddingTop(fsTreeStartOffset).
@@ -218,7 +219,7 @@ func (m model) View() string {
 	}
 
 	// Repeat the character vertically to fill height
-	dividerLines := make([]string, m.terminalHeight)
+	dividerLines := make([]string, m.contentHeight)
 	for i := range dividerLines {
 		dividerLines[i] = dividerChar
 	}
@@ -226,7 +227,7 @@ func (m model) View() string {
 
 	// Ensure divider has the correct height style applied (though JoinVertical does most of it)
 	divider = lipgloss.NewStyle().
-		Height(m.terminalHeight).
+		Height(m.contentHeight).
 		Render(divider)
 
 	notes := m.noteView.View()
@@ -237,7 +238,18 @@ func (m model) View() string {
 		divider,
 		notes,
 	)
-	return full
+
+	statusBar := lipgloss.NewStyle().
+		Width(m.terminalWidth - 2). // Subtract borders
+		Height(1).
+		Border(lipgloss.NormalBorder()).
+		Render("") // Placeholder text to ensure it's visible, can be empty string
+
+	return lipgloss.JoinVertical(
+		lipgloss.Left,
+		full,
+		statusBar,
+	)
 }
 
 // =================== bubbletea ui fns ===================
