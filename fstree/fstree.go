@@ -11,7 +11,6 @@ import (
 	"errors"
 	"mend/styles"
 	"mend/utils"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -26,27 +25,6 @@ const (
 	FileNode FsNodeType = iota
 	FolderNode
 )
-
-// ==================== Message types ====================
-type Msg interface{}
-
-type MsgMoveUp struct{}
-type MsgMoveDown struct{}
-type MsgToggleExpand struct{}
-type MsgLeftClickLine struct {
-	Line int
-}
-type MsgCreateNode struct {
-	Parent   *FsNode
-	Name     string
-	NodeType FsNodeType
-}
-type MsgDeleteNode struct {
-	Node *FsNode
-}
-type MsgHover struct {
-	Line int
-}
 
 // ==================== FsNode definition ====================
 // a single node, Fs => deals with file system related info mostly
@@ -82,26 +60,28 @@ func (t *FsTree) Init() tea.Cmd {
 
 func (t *FsTree) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch m := msg.(type) {
-	case MsgMoveUp:
-		_ = t.MoveUp()
-	case MsgMoveDown:
-		_ = t.MoveDown()
-	case MsgToggleExpand:
-		_ = t.ToggleSelectedExpand()
-	case MsgLeftClickLine:
-		nodeAtLine := t.lines[m.Line]
-		if nodeAtLine != nil {
-			t.selectedNode = nodeAtLine
-			if nodeAtLine.nodeType == FolderNode {
-				_ = t.ToggleExpand(nodeAtLine)
+	case tea.KeyMsg:
+		switch m.String() {
+		case "up", "k":
+			_ = t.MoveUp()
+		case "down", "j":
+			_ = t.MoveDown()
+		case "enter", " ":
+			_ = t.ToggleSelectedExpand()
+		}
+	case tea.MouseMsg:
+		t.hoveredNode = t.lines[m.Y] // hover
+
+		// click
+		if m.Button == tea.MouseButtonLeft && m.Action == tea.MouseActionPress {
+			nodeAtLine := t.lines[m.Y]
+			if nodeAtLine != nil {
+				t.selectedNode = nodeAtLine
+				if nodeAtLine.nodeType == FolderNode {
+					_ = t.ToggleExpand(nodeAtLine)
+				}
 			}
 		}
-	case MsgCreateNode:
-		_ = t.CreateNode(m.Parent, m.Name, m.NodeType)
-	case MsgDeleteNode:
-		_ = t.DeleteNode(m.Node)
-	case MsgHover:
-		t.hoveredNode = t.lines[m.Line]
 	}
 	return t, nil
 }
@@ -125,16 +105,11 @@ func NewFsTree(rootPath string) *FsTree {
 	// but since I use a map, it's easy to add
 	walkFileSystemAndBuildTree(rootPath, root)
 
-	var tree *FsTree
+	tree := &FsTree{
+		root: root,
+	}
 	if len(root.children) > 0 {
-		tree = &FsTree{
-			root:         root,
-			selectedNode: root.children[0],
-		}
-	} else {
-		tree = &FsTree{
-			root: root,
-		}
+		tree.selectedNode = root.children[0]
 	}
 	tree.buildLines()
 	return tree
@@ -225,22 +200,6 @@ func (t *FsTree) ToggleSelectedExpand() error {
 
 	t.ToggleExpand(t.selectedNode)
 	return nil
-}
-
-func (t *FsTree) GetSelectedContent() (string, error) {
-	if t.selectedNode == nil {
-		return "", errors.New("no node is currently selected")
-	}
-
-	if t.selectedNode.nodeType != FileNode {
-		return "", nil
-	}
-
-	contentBytes, err := os.ReadFile(t.selectedNode.path)
-	if err != nil {
-		return "", err
-	}
-	return string(contentBytes), nil
 }
 
 func (t *FsTree) renderNode(node *FsNode, depth int, builder *strings.Builder) {

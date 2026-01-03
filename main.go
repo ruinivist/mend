@@ -111,48 +111,18 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	case tea.MouseMsg:
 		if m.tree != nil {
-			// track hover for all mouse events within file tree
+			// pass mouse events within file tree bounds to tree
 			if msg.X < m.width {
-				m.tree.Update(fs.MsgHover{Line: msg.Y})
-			} else {
-				m.tree.Update(fs.MsgHover{Line: -1})
-			}
-
-			if msg.Button == tea.MouseButtonLeft && msg.Action == tea.MouseActionPress {
-				// within file tree
-				if msg.X < m.width {
-					m.tree.Update(fs.MsgLeftClickLine{Line: msg.Y})
-					content, err := m.tree.GetSelectedContent()
-					if err == nil {
-						m.viewport.SetContent(content)
-					}
-				}
+				m.tree.Update(msg)
 			}
 		}
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "q", "ctrl+c":
 			return m, tea.Quit
-		case "up", "k":
+		case "up", "k", "down", "j", "enter", " ":
 			if m.tree != nil {
-				m.tree.Update(fs.MsgMoveUp{})
-			}
-		case "down", "j":
-			if m.tree != nil {
-				m.tree.Update(fs.MsgMoveDown{})
-			}
-		case "enter", " ":
-			if m.tree != nil {
-				m.tree.Update(fs.MsgToggleExpand{})
-			}
-		case "l", "L":
-			if m.tree != nil {
-				content, err := m.tree.GetSelectedContent()
-				if err != nil {
-					fmt.Println("Error getting selected content:", err)
-				} else {
-					m.viewport.SetContent(content)
-				}
+				m.tree.Update(msg)
 			}
 		}
 	}
@@ -175,7 +145,6 @@ func main() {
 		rootPath = os.Args[1]
 	}
 	// if rootPath is empty, createModel will use cwd
-
 	p := tea.NewProgram(
 		createModel(rootPath),
 		tea.WithAltScreen(), // full screen tui
