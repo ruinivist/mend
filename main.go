@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	fs "mend/fstree"
 	"os"
 
 	"github.com/charmbracelet/bubbles/spinner"
@@ -38,7 +37,7 @@ type model struct {
 	width          int
 	terminalWidth  int
 	terminalHeight int
-	tree           *fs.FsTree
+	tree           *FsTree
 	rootPath       string // path to load the tree from
 	// spinner needs to be state as I need to update the spinner on
 	// each tick in update func
@@ -69,7 +68,7 @@ func createModel(rootPath string) model {
 // these need to be on the "model" ( duck typing "implements" interface )
 
 type treeLoadedMsg struct {
-	tree *fs.FsTree
+	tree *FsTree
 }
 
 func loadTreeCmd(path string) tea.Cmd {
@@ -85,7 +84,7 @@ func loadTreeCmd(path string) tea.Cmd {
 		} else {
 			targetPath = path
 		}
-		return treeLoadedMsg{tree: fs.NewFsTree(targetPath)}
+		return treeLoadedMsg{tree: NewFsTree(targetPath)}
 	}
 }
 
@@ -141,7 +140,12 @@ func (m model) View() string {
 		return fmt.Sprintf("%s Loading files...", m.spinner.View())
 	}
 
-	return m.tree.View()
+	tree := m.tree.View()
+	full := lipgloss.JoinHorizontal(
+		lipgloss.Top,
+		tree,
+	)
+	return full
 }
 
 // =================== bubbletea ui fns ===================

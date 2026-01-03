@@ -1,12 +1,9 @@
 /*
 This file has the raw file io operations that are used by FsTree
-or elsewhere in the app. Nowhere else should there be a direct
-fileopen
-
 - ruinivist, 30Dec25
 */
 
-package fstree
+package main
 
 import (
 	"errors"

@@ -3,6 +3,8 @@ I asked for very little ( a dialog box ) from life ( bubbletea ), and even this 
 I guess asking for an functional overlay was too much in 2025 so here is my own compositor layer.
 Idea is simple really I just draw the old ui and then on top draw the new ui, only overwriting what's needed
 The main problem is with handling of characters and styles which is "decent" enough here.
+
+NOTE: I had this module written at some point but I don't use it now
 - ruinivist, 1Jan26
 */
 
