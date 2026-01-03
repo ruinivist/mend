@@ -2,3 +2,5 @@
 .gemini
 prompts
 mend
+__debug*
+sample
