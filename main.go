@@ -39,6 +39,7 @@ type model struct {
 	terminalWidth  int
 	terminalHeight int
 	tree           *fs.FsTree
+	rootPath       string // path to load the tree from
 	// spinner needs to be state as I need to update the spinner on
 	// each tick in update func
 	spinner  spinner.Model
@@ -47,7 +48,7 @@ type model struct {
 }
 
 // initial model state
-func createModel() model {
+func createModel(rootPath string) model {
 	s := spinner.New()
 	s.Spinner = spinner.Dot
 	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
@@ -57,6 +58,7 @@ func createModel() model {
 		terminalWidth:  0,
 		terminalHeight: 0,
 		tree:           nil,
+		rootPath:       rootPath,
 		spinner:        s,
 		loading:        true,
 		viewport:       viewport.New(0, 0),
@@ -70,18 +72,25 @@ type treeLoadedMsg struct {
 	tree *fs.FsTree
 }
 
-func loadTreeCmd() tea.Msg {
-
-	cwd, err := os.Getwd()
-	if err != nil {
-		fmt.Println("Error getting cwd:", err)
-		os.Exit(1)
+func loadTreeCmd(path string) tea.Cmd {
+	return func() tea.Msg {
+		var targetPath string
+		if path == "" {
+			cwd, err := os.Getwd()
+			if err != nil {
+				fmt.Println("Error getting cwd:", err)
+				os.Exit(1)
+			}
+			targetPath = cwd
+		} else {
+			targetPath = path
+		}
+		return treeLoadedMsg{tree: fs.NewFsTree(targetPath)}
 	}
-	return treeLoadedMsg{tree: fs.NewFsTree(cwd)}
 }
 
 func (m model) Init() tea.Cmd {
-	return tea.Batch(m.spinner.Tick, loadTreeCmd)
+	return tea.Batch(m.spinner.Tick, loadTreeCmd(m.rootPath))
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -161,8 +170,14 @@ func (m model) View() string {
 // =================== bubbletea ui fns ===================
 
 func main() {
+	var rootPath string
+	if len(os.Args) > 1 {
+		rootPath = os.Args[1]
+	}
+	// if rootPath is empty, createModel will use cwd
+
 	p := tea.NewProgram(
-		createModel(),
+		createModel(rootPath),
 		tea.WithAltScreen(), // full screen tui
 		tea.WithMouseAllMotion(),
 	)
