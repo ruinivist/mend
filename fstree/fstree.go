@@ -52,6 +52,8 @@ type FsTree struct {
 	selectedNode *FsNode
 	hoveredNode  *FsNode
 	errMsg       string
+	height       int
+	width        int
 }
 
 // ==================== Bubble Tea Interface Implementation ====================
@@ -61,6 +63,9 @@ func (t *FsTree) Init() tea.Cmd {
 
 func (t *FsTree) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch m := msg.(type) {
+	case tea.WindowSizeMsg:
+		t.width = m.Width
+		t.height = m.Height
 	case tea.KeyMsg:
 		t.errMsg = ""
 		switch m.String() {
@@ -117,7 +122,33 @@ func (t *FsTree) View() string {
 
 	builder := &strings.Builder{}
 	t.renderNode(t.root, 0, builder)
-	return builder.String()
+	rendered := builder.String()
+
+	// clamp to height around selected node
+	if t.selectedNode != nil {
+		lines := strings.Split(rendered, "\n")
+		totalLines := len(lines)
+		selectedLine := t.selectedNode.line
+
+		halfHeight := t.height / 2
+		startLine := selectedLine - halfHeight
+		if startLine < 0 {
+			startLine = 0
+		}
+		endLine := startLine + t.height
+		if endLine > totalLines {
+			endLine = totalLines
+			startLine = endLine - t.height
+			if startLine < 0 {
+				startLine = 0
+			}
+		}
+
+		clampedLines := lines[startLine:endLine]
+		rendered = strings.Join(clampedLines, "\n")
+	}
+
+	return rendered
 }
 
 // ==================== FsTree helper methods ====================
