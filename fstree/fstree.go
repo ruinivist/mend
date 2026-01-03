@@ -51,6 +51,7 @@ type FsTree struct {
 	lines        map[int]*FsNode // flattened view of nodes for easy line access, map so that I can handle blank padding
 	selectedNode *FsNode
 	hoveredNode  *FsNode
+	errMsg       string
 }
 
 // ==================== Bubble Tea Interface Implementation ====================
@@ -61,6 +62,7 @@ func (t *FsTree) Init() tea.Cmd {
 func (t *FsTree) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch m := msg.(type) {
 	case tea.KeyMsg:
+		t.errMsg = ""
 		switch m.String() {
 		case "up", "k":
 			_ = t.MoveUp()
@@ -69,16 +71,29 @@ func (t *FsTree) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter", " ":
 			_ = t.ToggleSelectedExpand()
 		case "n": // new file
-			_ = t.CreateNode(t.selectedNode, "new_file.txt", FileNode)
+			err := t.CreateNode(t.selectedNode, "new_file.txt", FileNode)
+			if err != nil {
+				t.errMsg = err.Error()
+			}
 		case "N": // new folder
-			_ = t.CreateNode(t.selectedNode, "new_folder", FolderNode)
+			err := t.CreateNode(t.selectedNode, "new_folder", FolderNode)
+			if err != nil {
+				t.errMsg = err.Error()
+			}
 		case "C": // new root node
-			_ = t.CreateNode(t.root, "new_root_folder", FolderNode)
+			err := t.CreateNode(t.root, "new_root_folder", FolderNode)
+			if err != nil {
+				t.errMsg = err.Error()
+			}
 		case "d", "delete": // delete node
-			_ = t.DeleteNode(t.selectedNode)
+			err := t.DeleteNode(t.selectedNode)
+			if err != nil {
+				t.errMsg = err.Error()
+			}
 		}
 
 	case tea.MouseMsg:
+		t.errMsg = ""
 		t.hoveredNode = t.lines[m.Y] // hover
 
 		// click
@@ -96,6 +111,10 @@ func (t *FsTree) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (t *FsTree) View() string {
+	if t.errMsg != "" {
+		return t.errMsg
+	}
+
 	builder := &strings.Builder{}
 	t.renderNode(t.root, 0, builder)
 	return builder.String()
@@ -129,6 +148,11 @@ func (t *FsTree) DeleteNode(node *FsNode) error {
 	parent := node.parent
 	if parent == nil {
 		return errors.New("node to delete must have a parent")
+	}
+
+	// materialise
+	if err := deletePath(node.path); err != nil {
+		return err
 	}
 
 	t.selectedNode = node.prev // cannot be next as subfolder/file deletion
@@ -303,6 +327,19 @@ func (t *FsTree) CreateNode(folder *FsNode, name string, nodeType FsNodeType) er
 	}
 
 	path := filepath.Join(folder.path, name)
+	// materialise it first
+	if nodeType == FileNode {
+		err := createFile(path, []byte{})
+		if err != nil {
+			return err
+		}
+	} else if nodeType == FolderNode {
+		err := createFolder(path)
+		if err != nil {
+			return err
+		}
+	}
+
 	expanded := false
 	if nodeType == FolderNode {
 		expanded = true
