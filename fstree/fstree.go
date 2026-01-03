@@ -74,6 +74,8 @@ func (t *FsTree) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			_ = t.CreateNode(t.selectedNode, "new_folder", FolderNode)
 		case "C": // new root node
 			_ = t.CreateNode(t.root, "new_root_folder", FolderNode)
+		case "d", "delete": // delete node
+			_ = t.DeleteNode(t.selectedNode)
 		}
 
 	case tea.MouseMsg:
@@ -129,7 +131,16 @@ func (t *FsTree) DeleteNode(node *FsNode) error {
 		return errors.New("node to delete must have a parent")
 	}
 
+	t.selectedNode = node.prev // cannot be next as subfolder/file deletion
 	parent.children = utils.RemoveFromSlice(parent.children, node)
+
+	if t.selectedNode == nil {
+		// can only happen if first root level node is deleted
+		if len(t.root.children) > 0 {
+			t.selectedNode = t.root.children[0]
+		}
+	}
+
 	t.buildLines()
 	return nil
 }
@@ -244,15 +255,12 @@ func (t *FsTree) buildLines() {
 	flatTree := make([]*FsNode, 0)
 	t.buildLinesRec(t.root, 0, &line, &flatTree) // root has -1 depth and -1 index, as it's not meant to be rendered
 	// everything is a child of root
-	flatTree = flatTree[1:] // skip root
+	flatTree[0] = nil // basically a merge of skip root and padding ends with nil
+	flatTree = append(flatTree, nil)
 
-	for i, node := range flatTree {
-		if i > 0 {
-			node.prev = flatTree[i-1]
-		}
-		if i < len(flatTree)-1 {
-			node.next = flatTree[i+1]
-		}
+	for i := 1; i < len(flatTree)-1; i++ {
+		flatTree[i].prev = flatTree[i-1]
+		flatTree[i].next = flatTree[i+1]
 	}
 }
 
