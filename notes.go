@@ -31,7 +31,7 @@ type NoteView struct {
 	title      string   // the first line is always # title
 	content    string   // strip the first line from file rest is content
 	rawContent string   // full content for editing
-	hints      []string //a hint is anything that matches (hint: <text>) in content
+	hints      []string //a hint is anything that matches **text** or __text__ in content
 	// display layer
 	err        error
 	loading    bool
@@ -219,12 +219,14 @@ func saveContent(path, content string) tea.Cmd {
 }
 
 func extractHints(content string) []string {
-	re := regexp.MustCompile(`(?s)\(hint:\s*(.*?)\)`)
+	re := regexp.MustCompile(`(?s)\*\*(.*?)\*\*|__(.*?)__`)
 	matches := re.FindAllStringSubmatch(content, -1)
 	hints := make([]string, 0)
 	for _, match := range matches {
-		if len(match) > 1 {
+		if len(match) > 1 && match[1] != "" {
 			hints = append(hints, match[1])
+		} else if len(match) > 2 && match[2] != "" {
+			hints = append(hints, match[2])
 		}
 	}
 	return hints
