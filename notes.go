@@ -76,10 +76,10 @@ func (m *NoteView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "d", "right":
+		case "d":
 			m.viewState = StateContent
 			m.vp.SetContent(m.renderNote())
-		case "a", "left":
+		case "a":
 			m.viewState = StateHints
 			m.vp.SetContent(m.renderNote())
 		}
