@@ -6,7 +6,7 @@ const (
 	minNoteViewWidth  = 10
 	dividerWidth      = 1
 	dragHitArea       = 2 // +/- chars around divider
-	fsTreeStartOffset = 1
+	fsTreeStartOffset = 0 // there's bug when this is not 0 and the terminal height is small; I don't want to bother
 	statusBarHeight   = 3
 )
 
