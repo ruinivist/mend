@@ -1,6 +1,6 @@
 package main
 
-// Layout constants to avoid magic numbers
+// layout constants
 const (
 	minFsTreeWidth   = 5
 	minNoteViewWidth = 10
@@ -10,20 +10,16 @@ const (
 
 // calculateLayout computes the widths for the file tree and note view
 // based on the terminal dimensions and the desired tree width.
-// It returns the constrained tree width and the resulting note view width.
 func calculateLayout(totalWidth, requestedTreeWidth int) (treeWidth, noteWidth int) {
 	treeWidth = requestedTreeWidth
-	
-	// Default initial width if not set
+
 	if treeWidth == 0 {
 		treeWidth = totalWidth / 4
 	}
 
-	// Calculate maximum allowed width for the tree
-	// Total width - divider - minimum note view width
 	maxTreeWidth := totalWidth - dividerWidth - minNoteViewWidth
 
-	// Apply constraints
+	// constraints
 	if treeWidth > maxTreeWidth {
 		treeWidth = maxTreeWidth
 	}
@@ -31,12 +27,7 @@ func calculateLayout(totalWidth, requestedTreeWidth int) (treeWidth, noteWidth i
 		treeWidth = minFsTreeWidth
 	}
 
-	noteWidth = totalWidth - treeWidth - dividerWidth
-	
-	// Safety check to ensure noteWidth is never negative
-	if noteWidth < 0 {
-		noteWidth = 0
-	}
+	noteWidth = max(0, totalWidth-treeWidth-dividerWidth)
 
 	return treeWidth, noteWidth
 }
