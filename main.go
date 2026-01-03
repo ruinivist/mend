@@ -88,6 +88,8 @@ func (m *model) Init() tea.Cmd {
 
 func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	// DEV TIP: ALWAYS RETURN IN EACH BRANCH
+	// FALLTHROUGHS ARE BAD
 	case tea.WindowSizeMsg:
 		m.layout(msg.Width, msg.Height)
 
