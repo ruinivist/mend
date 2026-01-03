@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -45,14 +46,23 @@ type model struct {
 	isHoveringDivider bool
 	contentHeight     int
 	showStatusBar     bool
+	// input handling
+	textInput     textinput.Model
+	inputMode     bool
+	pendingAction FsActionType
 }
 
 func NewModel(rootPath string) *model {
+	ti := textinput.New()
+	ti.CharLimit = 156
+	ti.Width = 30
+
 	return &model{
 		rootPath:      rootPath,
 		loading:       true,
 		noteView:      NewNoteView(),
-		showStatusBar: true,
+		showStatusBar: false,
+		textInput:     ti,
 	}
 }
 
@@ -86,10 +96,27 @@ func (m *model) layout(width, height int) {
 	m.fsTreeWidth, m.noteViewWidth = calculateLayout(width, m.fsTreeWidth)
 
 	h := height
-	if m.showStatusBar {
+	if m.showStatusBar || m.inputMode {
 		h -= statusBarHeight
 	}
 	m.contentHeight = max(0, h)
+}
+
+func (m *model) resizeChildren() tea.Cmd {
+	var cmds []tea.Cmd
+	if m.tree != nil {
+		_, cmd := m.tree.Update(tea.WindowSizeMsg{
+			Width:  m.fsTreeWidth,
+			Height: m.contentHeight,
+		})
+		cmds = append(cmds, cmd)
+	}
+	_, cmd := m.noteView.Update(tea.WindowSizeMsg{
+		Width:  m.noteViewWidth,
+		Height: m.contentHeight,
+	})
+	cmds = append(cmds, cmd)
+	return tea.Batch(cmds...)
 }
 
 func (m *model) Init() tea.Cmd {
@@ -102,21 +129,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// FALLTHROUGHS ARE BAD
 	case tea.WindowSizeMsg:
 		m.layout(msg.Width, msg.Height)
-
-		var cmds []tea.Cmd
-		if m.tree != nil {
-			_, cmd := m.tree.Update(tea.WindowSizeMsg{
-				Width:  m.fsTreeWidth,
-				Height: m.contentHeight,
-			})
-			cmds = append(cmds, cmd)
-		}
-		_, cmd := m.noteView.Update(tea.WindowSizeMsg{
-			Width:  m.noteViewWidth,
-			Height: m.contentHeight,
-		})
-		cmds = append(cmds, cmd)
-		return m, tea.Batch(cmds...)
+		return m, m.resizeChildren()
 
 	case treeLoadedMsg:
 		m.tree = msg.tree
@@ -137,28 +150,65 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		_, cmd := m.noteView.Update(msg)
 		return m, cmd
 
+	case PerformActionMsg:
+		if m.tree != nil {
+			_, cmd := m.tree.Update(msg)
+			return m, cmd
+		}
+
+	case RequestInputMsg:
+		m.inputMode = true
+		m.pendingAction = msg.Action
+		m.textInput.Focus()
+		m.textInput.SetValue("")
+		switch msg.Action {
+		case ActionNewFile:
+			m.textInput.Placeholder = "New File Name"
+		case ActionNewFolder:
+			m.textInput.Placeholder = "New Folder Name"
+		case ActionNewRoot:
+			m.textInput.Placeholder = "New Root Folder Name"
+		}
+		m.layout(m.terminalWidth, m.terminalHeight) // recalc layout for status bar area
+		return m, m.resizeChildren()
+
 	case tea.KeyMsg:
+		if m.inputMode {
+			switch msg.String() {
+			case "enter":
+				val := m.textInput.Value()
+				m.inputMode = false
+				m.textInput.Blur()
+				m.layout(m.terminalWidth, m.terminalHeight)
+
+				cmds := []tea.Cmd{m.resizeChildren()}
+				if val != "" {
+					cmds = append(cmds, func() tea.Msg {
+						return PerformActionMsg{
+							Action: m.pendingAction,
+							Name:   val,
+						}
+					})
+				}
+				return m, tea.Batch(cmds...)
+			case "esc":
+				m.inputMode = false
+				m.textInput.Blur()
+				m.layout(m.terminalWidth, m.terminalHeight)
+				return m, m.resizeChildren()
+			}
+			var cmd tea.Cmd
+			m.textInput, cmd = m.textInput.Update(msg)
+			return m, cmd
+		}
+
 		switch msg.String() {
 		case "q", "ctrl+c":
 			return m, tea.Quit
 		case "i":
 			m.showStatusBar = !m.showStatusBar
 			m.layout(m.terminalWidth, m.terminalHeight)
-
-			var cmds []tea.Cmd
-			if m.tree != nil {
-				_, cmd := m.tree.Update(tea.WindowSizeMsg{
-					Width:  m.fsTreeWidth,
-					Height: m.contentHeight,
-				})
-				cmds = append(cmds, cmd)
-			}
-			_, cmd := m.noteView.Update(tea.WindowSizeMsg{
-				Width:  m.noteViewWidth,
-				Height: m.contentHeight,
-			})
-			cmds = append(cmds, cmd)
-			return m, tea.Batch(cmds...)
+			return m, m.resizeChildren()
 		}
 
 		var cmds []tea.Cmd
@@ -187,20 +237,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.fsTreeWidth, m.noteViewWidth = calculateLayout(m.terminalWidth, msg.X)
 
 				// Update children with new sizes
-				var cmds []tea.Cmd
-				if m.tree != nil {
-					_, cmd := m.tree.Update(tea.WindowSizeMsg{
-						Width:  m.fsTreeWidth,
-						Height: m.contentHeight,
-					})
-					cmds = append(cmds, cmd)
-				}
-				_, cmd := m.noteView.Update(tea.WindowSizeMsg{
-					Width:  m.noteViewWidth,
-					Height: m.contentHeight,
-				})
-				cmds = append(cmds, cmd)
-				return m, tea.Batch(cmds...)
+				return m, m.resizeChildren()
 			}
 		}
 
@@ -264,15 +301,22 @@ func (m model) View() string {
 		notes,
 	)
 
-	if !m.showStatusBar {
+	if !m.showStatusBar && !m.inputMode {
 		return full
+	}
+
+	statusContent := ""
+	if m.inputMode {
+		statusContent = m.textInput.View()
+	} else if m.tree != nil && m.tree.errMsg != "" {
+		statusContent = lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Render(m.tree.errMsg)
 	}
 
 	statusBar := lipgloss.NewStyle().
 		Width(m.terminalWidth - 2). // Subtract borders
 		Height(1).
 		Border(lipgloss.NormalBorder()).
-		Render("") // Placeholder text to ensure it's visible, can be empty string
+		Render(statusContent)
 
 	return lipgloss.JoinVertical(
 		lipgloss.Left,

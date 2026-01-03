@@ -50,6 +50,23 @@ type nodeSelected struct {
 	path string
 }
 
+type FsActionType int
+
+const (
+	ActionNewFile FsActionType = iota
+	ActionNewFolder
+	ActionNewRoot
+)
+
+type RequestInputMsg struct {
+	Action FsActionType
+}
+
+type PerformActionMsg struct {
+	Action FsActionType
+	Name   string
+}
+
 // ==================== FsNode definition ====================
 type FsTree struct {
 	root         *FsNode
@@ -72,6 +89,11 @@ func (t *FsTree) Init() tea.Cmd {
 
 func (t *FsTree) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch m := msg.(type) {
+	case PerformActionMsg:
+		err := t.PerformAction(m.Action, m.Name)
+		if err != nil {
+			t.errMsg = err.Error()
+		}
 	case tea.WindowSizeMsg:
 		t.width = m.Width
 		t.height = m.Height
@@ -85,20 +107,11 @@ func (t *FsTree) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter", " ":
 			_ = t.ToggleSelectedExpand()
 		case "n": // new file
-			err := t.CreateNode(t.selectedNode, "new_file.txt", FileNode)
-			if err != nil {
-				t.errMsg = err.Error()
-			}
+			return t, func() tea.Msg { return RequestInputMsg{Action: ActionNewFile} }
 		case "N": // new folder
-			err := t.CreateNode(t.selectedNode, "new_folder", FolderNode)
-			if err != nil {
-				t.errMsg = err.Error()
-			}
+			return t, func() tea.Msg { return RequestInputMsg{Action: ActionNewFolder} }
 		case "C": // new root node
-			err := t.CreateNode(t.root, "new_root_folder", FolderNode)
-			if err != nil {
-				t.errMsg = err.Error()
-			}
+			return t, func() tea.Msg { return RequestInputMsg{Action: ActionNewRoot} }
 		case "d", "delete": // delete node
 			err := t.DeleteNode(t.selectedNode)
 			if err != nil {
@@ -135,6 +148,18 @@ func (t *FsTree) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 	return t, nil
+}
+
+func (t *FsTree) PerformAction(action FsActionType, name string) error {
+	switch action {
+	case ActionNewFile:
+		return t.CreateNode(t.selectedNode, name, FileNode)
+	case ActionNewFolder:
+		return t.CreateNode(t.selectedNode, name, FolderNode)
+	case ActionNewRoot:
+		return t.CreateNode(t.root, name, FolderNode)
+	}
+	return nil
 }
 
 func (t *FsTree) getViewportBounds(totalLines int) (startLine, endLine int) {
