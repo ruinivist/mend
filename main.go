@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/charmbracelet/bubbles/spinner"
-	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -37,30 +35,19 @@ type model struct {
 	width          int
 	terminalWidth  int
 	terminalHeight int
+	fsTreeWidth    int
+	noteViewWidth  int
 	tree           *FsTree
 	rootPath       string // path to load the tree from
-	// spinner needs to be state as I need to update the spinner on
-	// each tick in update func
-	spinner  spinner.Model
-	loading  bool
-	viewport viewport.Model
+	loading        bool
+	noteView       *NoteView
 }
 
-// initial model state
-func createModel(rootPath string) model {
-	s := spinner.New()
-	s.Spinner = spinner.Dot
-	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
-
-	return model{
-		width:          30, // char count
-		terminalWidth:  0,
-		terminalHeight: 0,
-		tree:           nil,
-		rootPath:       rootPath,
-		spinner:        s,
-		loading:        true,
-		viewport:       viewport.New(0, 0),
+func NewModel(rootPath string) *model {
+	return &model{
+		rootPath: rootPath,
+		loading:  true,
+		noteView: NewNoteView(),
 	}
 }
 
@@ -71,7 +58,7 @@ type treeLoadedMsg struct {
 	tree *FsTree
 }
 
-func loadTreeCmd(path string) tea.Cmd {
+func (m *model) loadTreeCmd(path string) tea.Cmd {
 	return func() tea.Msg {
 		var targetPath string
 		if path == "" {
@@ -88,62 +75,101 @@ func loadTreeCmd(path string) tea.Cmd {
 	}
 }
 
-func (m model) Init() tea.Cmd {
-	return tea.Batch(m.spinner.Tick, loadTreeCmd(m.rootPath))
+func (m *model) layout(width, height int) {
+	m.terminalWidth = width
+	m.terminalHeight = height
+	m.fsTreeWidth = width / 4
+	m.noteViewWidth = width - m.fsTreeWidth
 }
 
-func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *model) Init() tea.Cmd {
+	return m.loadTreeCmd(m.rootPath)
+}
+
+func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		m.terminalWidth = msg.Width
-		m.terminalHeight = msg.Height
+		m.layout(msg.Width, msg.Height)
+
+		var cmds []tea.Cmd
 		if m.tree != nil {
-			m.tree.Update(tea.WindowSizeMsg{
+			_, cmd := m.tree.Update(tea.WindowSizeMsg{
+				Width:  m.fsTreeWidth,
 				Height: m.terminalHeight,
-				Width:  m.terminalWidth,
 			})
+			cmds = append(cmds, cmd)
 		}
-		return m, nil
+		_, cmd := m.noteView.Update(tea.WindowSizeMsg{
+			Width:  m.noteViewWidth,
+			Height: m.terminalHeight,
+		})
+		cmds = append(cmds, cmd)
+		return m, tea.Batch(cmds...)
+
 	case treeLoadedMsg:
 		m.tree = msg.tree
 		m.loading = false
-		m.tree.Update(tea.WindowSizeMsg{
+		_, cmd := m.tree.Update(tea.WindowSizeMsg{
 			Height: m.terminalHeight,
-			Width:  m.terminalWidth,
+			Width:  m.fsTreeWidth,
 		})
-		return m, nil
-	case spinner.TickMsg:
-		var cmd tea.Cmd
-		m.spinner, cmd = m.spinner.Update(msg)
 		return m, cmd
-	case tea.MouseMsg:
-		if m.tree != nil {
-			// pass mouse events within file tree bounds to tree
-			if msg.X < m.width {
-				m.tree.Update(msg)
-			}
-		}
+
+	case nodeSelected:
+		// Forward node selection to noteView
+		_, cmd := m.noteView.Update(loadNote{path: msg.path})
+		return m, cmd
+
+	case loadedNote:
+		// Forward loaded note to noteView
+		_, cmd := m.noteView.Update(msg)
+		return m, cmd
+
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "q", "ctrl+c":
 			return m, tea.Quit
 		}
+		// Forward keyboard input to tree
+		var cmd tea.Cmd
 		if m.tree != nil {
-			m.tree.Update(msg)
+			_, cmd = m.tree.Update(msg)
 		}
+		return m, cmd
+
+	case tea.MouseMsg:
+		// Forward mouse input to tree
+		var cmd tea.Cmd
+		if m.tree != nil {
+			_, cmd = m.tree.Update(msg)
+		}
+		return m, cmd
 	}
+
 	return m, nil
 }
 
 func (m model) View() string {
 	if m.loading {
-		return fmt.Sprintf("%s Loading files...", m.spinner.View())
+		return "Loading files..."
 	}
 
 	tree := m.tree.View()
+	tree = lipgloss.NewStyle().
+		Border(lipgloss.NormalBorder()).
+		Width(40).
+		Align(lipgloss.Left).
+		PaddingRight(2).
+		BorderLeft(false).
+		BorderTop(false).
+		BorderBottom(false).
+		Render(tree)
+	notes := m.noteView.View()
+
 	full := lipgloss.JoinHorizontal(
 		lipgloss.Top,
 		tree,
+		notes,
 	)
 	return full
 }
@@ -157,7 +183,7 @@ func main() {
 	}
 	// if rootPath is empty, createModel will use cwd
 	p := tea.NewProgram(
-		createModel(rootPath),
+		NewModel(rootPath),
 		tea.WithAltScreen(), // full screen tui
 		tea.WithMouseAllMotion(),
 	)
