@@ -8,11 +8,20 @@ package main
 
 import (
 	"os"
+	"regexp"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/glamour"
+)
+
+type ViewState int
+
+const (
+	StateTitleOnly ViewState = iota
+	StateContent
+	StateHints
 )
 
 type NoteView struct {
@@ -26,6 +35,7 @@ type NoteView struct {
 	loading    bool
 	vp         viewport.Model
 	mdRenderer *glamour.TermRenderer
+	viewState  ViewState
 }
 
 // ================== messages ===================
@@ -49,6 +59,7 @@ func NewNoteView() *NoteView {
 		loading:    true,
 		mdRenderer: mdRenderer,
 		vp:         viewport.New(0, 0),
+		viewState:  StateTitleOnly,
 	}
 }
 
@@ -62,6 +73,19 @@ func (m *NoteView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.vp.Width = msg.Width
 		m.vp.Height = msg.Height
 		return m, nil
+
+	case tea.KeyMsg:
+		switch msg.String() {
+		case " ":
+			m.viewState = StateContent
+			m.vp.SetContent(m.renderNote())
+		case "h":
+			m.viewState = StateHints
+			m.vp.SetContent(m.renderNote())
+		}
+		var cmd tea.Cmd
+		m.vp, cmd = m.vp.Update(msg)
+		return m, cmd
 
 	case loadNote:
 		if m.path == msg.path {
@@ -77,6 +101,7 @@ func (m *NoteView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.content = msg.content
 		m.hints = msg.hints
 		m.err = msg.err
+		m.viewState = StateTitleOnly
 		m.vp.SetContent(m.renderNote())
 		return m, nil
 	}
@@ -126,18 +151,47 @@ func fetchContent(path string) tea.Cmd {
 }
 
 func extractHints(content string) []string {
+	re := regexp.MustCompile(`(?s)\(hint:\s*(.*?)\)`)
+	matches := re.FindAllStringSubmatch(content, -1)
 	hints := make([]string, 0)
-	return hints // to add later
+	for _, match := range matches {
+		if len(match) > 1 {
+			hints = append(hints, match[1])
+		}
+	}
+	return hints
 }
 
 func (m NoteView) renderNote() string {
 	title, err1 := m.mdRenderer.Render(m.title)
-	content, err2 := m.mdRenderer.Render(m.content)
-
-	if err1 != nil || err2 != nil {
-		// some error return raw
-		return m.title + "\n\n" + m.content
+	if err1 != nil {
+		title = m.title + "\n\n"
 	}
 
-	return title + content
+	var body string
+	var err2 error
+
+	switch m.viewState {
+	case StateContent:
+		body, err2 = m.mdRenderer.Render(m.content)
+	case StateHints:
+		if len(m.hints) == 0 {
+			body = "No hints available."
+		} else {
+			// Format hints as a list
+			hintsList := ""
+			for _, h := range m.hints {
+				hintsList += "- " + h + "\n"
+			}
+			body, err2 = m.mdRenderer.Render(hintsList)
+		}
+	case StateTitleOnly:
+		body = "\n(Press 'space' to show content, 'h' to show hints)"
+	}
+
+	if err2 != nil {
+		return title + "\nError rendering content."
+	}
+
+	return title + body
 }
