@@ -78,6 +78,7 @@ type FsTree struct {
 	width        int
 	viewStart    int
 	viewEnd      int
+	totalLines   int
 	oldSelected  *FsNode
 	startOffset  int
 }
@@ -120,6 +121,15 @@ func (t *FsTree) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case tea.MouseMsg:
+		if m.Action == tea.MouseActionPress {
+			switch m.Button {
+			case tea.MouseButtonWheelUp:
+				_ = t.MoveUp()
+			case tea.MouseButtonWheelDown:
+				_ = t.MoveDown()
+			}
+		}
+
 		m.Y += t.viewStart - t.startOffset // adjust for viewport
 		if m.X >= t.width {
 			break
@@ -139,7 +149,7 @@ func (t *FsTree) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	t.viewStart, t.viewEnd = t.getViewportBounds(len(t.lines))
+	t.viewStart, t.viewEnd = t.getViewportBounds()
 
 	if t.oldSelected != t.selectedNode {
 		t.oldSelected = t.selectedNode
@@ -162,18 +172,15 @@ func (t *FsTree) PerformAction(action FsActionType, name string) error {
 	return nil
 }
 
-func (t *FsTree) getViewportBounds(totalLines int) (startLine, endLine int) {
+func (t *FsTree) getViewportBounds() (startLine, endLine int) {
 	selectedLine := t.selectedNode.line
 	halfHeight := t.height / 2
 
-	startLine = selectedLine - halfHeight
-	if startLine < 0 {
-		startLine = 0
-	}
+	startLine = max(0, selectedLine-halfHeight)
 
 	endLine = startLine + t.height
-	if endLine > totalLines {
-		endLine = totalLines
+	if endLine > t.totalLines {
+		endLine = t.totalLines
 		startLine = endLine - t.height
 		if startLine < 0 {
 			startLine = 0
@@ -370,6 +377,7 @@ func (t *FsTree) buildLines() {
 	// everything is a child of root
 	flatTree[0] = nil // basically a merge of skip root and padding ends with nil
 	flatTree = append(flatTree, nil)
+	t.totalLines = line
 
 	for i := 1; i < len(flatTree)-1; i++ {
 		flatTree[i].prev = flatTree[i-1]
