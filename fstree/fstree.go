@@ -278,7 +278,10 @@ func (t *FsTree) renderNode(node *FsNode, depth int, builder *strings.Builder, h
 	}
 
 	line := icon + " " + fileName + "\n"
-	builder.WriteString(line)
+	// the depth 0 is the dummy root node, I don't render that
+	if depth > 0 {
+		builder.WriteString(line)
+	}
 	*currentLine++
 
 	if node.expanded {
