@@ -93,41 +93,13 @@ func createFolder(path string) error {
 	return os.Mkdir(path, 0755)
 }
 
-func deleteFile(path string) error {
+func deletePath(path string) error {
 	if path == "" {
-		return errors.New("file path cannot be empty")
+		return errors.New("path cannot be empty")
 	}
 
-	info, err := os.Stat(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return errors.New("file does not exist")
-		}
-		return err
-	}
-
-	if info.IsDir() {
-		return errors.New("path is a directory, not a file")
-	}
-
-	return os.Remove(path)
-}
-
-func deleteFolder(path string) error {
-	if path == "" {
-		return errors.New("folder path cannot be empty")
-	}
-
-	info, err := os.Stat(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return errors.New("folder does not exist")
-		}
-		return err
-	}
-
-	if !info.IsDir() {
-		return errors.New("path is a file, not a directory")
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return errors.New("path does not exist")
 	}
 
 	return os.RemoveAll(path)
