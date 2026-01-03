@@ -14,7 +14,7 @@ import (
 	"path/filepath"
 )
 
-func walkFileSystemAndBuildTree(rootPath string, node *FsNode, flatTree *[]*FsNode) error {
+func walkFileSystemAndBuildTree(rootPath string, node *FsNode) error {
 	if node == nil {
 		return errors.New("node cannot be nil")
 	}
@@ -43,7 +43,6 @@ func walkFileSystemAndBuildTree(rootPath string, node *FsNode, flatTree *[]*FsNo
 		}
 	}
 
-	*flatTree = append(*flatTree, node) // add self
 	for _, file := range files {
 		newNode := &FsNode{
 			nodeType: FileNode,
@@ -53,7 +52,6 @@ func walkFileSystemAndBuildTree(rootPath string, node *FsNode, flatTree *[]*FsNo
 			expanded: false,
 		}
 		node.children = append(node.children, newNode)
-		*flatTree = append(*flatTree, newNode)
 	}
 
 	for _, folder := range folders {
@@ -65,7 +63,7 @@ func walkFileSystemAndBuildTree(rootPath string, node *FsNode, flatTree *[]*FsNo
 			expanded: true, // all expanded by default
 		}
 		node.children = append(node.children, newNode)
-		walkFileSystemAndBuildTree(newNode.path, newNode, flatTree)
+		walkFileSystemAndBuildTree(newNode.path, newNode)
 	}
 
 	return nil

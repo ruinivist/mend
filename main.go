@@ -118,10 +118,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.tree.Update(fs.MsgHover{Line: -1})
 			}
 
-			if msg.Button == tea.MouseButtonLeft {
+			if msg.Button == tea.MouseButtonLeft && msg.Action == tea.MouseActionPress {
 				// within file tree
 				if msg.X < m.width {
-					m.tree.Update(fs.MsgSelectAtLine{Line: msg.Y})
+					m.tree.Update(fs.MsgLeftClickLine{Line: msg.Y})
 					content, err := m.tree.GetSelectedContent()
 					if err == nil {
 						m.viewport.SetContent(content)

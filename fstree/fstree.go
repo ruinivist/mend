@@ -33,7 +33,7 @@ type Msg interface{}
 type MsgMoveUp struct{}
 type MsgMoveDown struct{}
 type MsgToggleExpand struct{}
-type MsgSelectAtLine struct {
+type MsgLeftClickLine struct {
 	Line int
 }
 type MsgCreateNode struct {
@@ -56,8 +56,7 @@ type FsNode struct {
 	path     string
 	children []*FsNode
 	parent   *FsNode // for fast traversal up the tree
-	// for view layer
-	expanded bool // makes sense only for folder nodes
+	expanded bool    // makes sense only for folder nodes
 }
 
 func (n *FsNode) FileName() string {
@@ -66,10 +65,10 @@ func (n *FsNode) FileName() string {
 
 // ==================== FsNode definition ====================
 type FsTree struct {
-	root      *FsNode
-	selected  int
-	lines     []*FsNode // flattened view of nodes
-	hoverLine int       // for mouse hover highlighting
+	root         *FsNode
+	lines        map[int]*FsNode // flattened view of nodes for easy line access, map so that I can handle blank padding
+	selectedLine int
+	hoverLine    int
 }
 
 // ==================== Bubble Tea Interface Implementation ====================
@@ -85,8 +84,14 @@ func (t *FsTree) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		_ = t.MoveDown()
 	case MsgToggleExpand:
 		_ = t.ToggleSelectedExpand()
-	case MsgSelectAtLine:
-		_ = t.SelectNodeAtLine(m.Line)
+	case MsgLeftClickLine:
+		node := t.lines[m.Line]
+		switch node.nodeType {
+		case FolderNode:
+			_ = t.ToggleExpand(node)
+		case FileNode:
+			_ = t.SelectNodeAtLine(m.Line)
+		}
 	case MsgCreateNode:
 		_ = t.CreateNode(m.Parent, m.Name, m.NodeType)
 	case MsgDeleteNode:
@@ -99,19 +104,12 @@ func (t *FsTree) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (t *FsTree) View() string {
 	builder := &strings.Builder{}
-	lineCounter := 0
-	t.renderNode(t.root, 0, builder, t.hoverLine, &lineCounter)
+	curLine := -1
+	t.renderNode(t.root, 0, builder, &curLine)
 	return builder.String()
 }
 
 // ==================== FsTree helper methods ====================
-
-func (t *FsTree) selectedNode() *FsNode {
-	if t.selected <= 0 || t.selected >= len(t.lines) {
-		return nil
-	}
-	return t.lines[t.selected]
-}
 
 func NewFsTree(rootPath string) *FsTree {
 	root := &FsNode{
@@ -120,20 +118,26 @@ func NewFsTree(rootPath string) *FsTree {
 		children: make([]*FsNode, 0),
 		expanded: true,
 	}
-	flatTree := make([]*FsNode, 0)
-	walkFileSystemAndBuildTree(rootPath, root, &flatTree)
+	// root is at -1, rest all are 0 indexed, REM: this walk func does no handle spaces right now
+	// but since I use a map, it's easy to add
+	walkFileSystemAndBuildTree(rootPath, root)
 
+	var tree *FsTree
 	if len(root.children) > 0 {
-		return &FsTree{
-			root:     root,
-			selected: 1, // first child
-			lines:    flatTree,
+		tree = &FsTree{
+			root:         root,
+			selectedLine: 0,
 		}
 	}
-	return &FsTree{
-		root:  root,
-		lines: flatTree,
+	tree = &FsTree{
+		root: root,
 	}
+	tree.buildLines()
+	return tree
+}
+
+func (t *FsTree) selectedNode() *FsNode {
+	return t.lines[t.selectedLine]
 }
 
 func (t *FsTree) CreateNode(parent *FsNode, name string, nodeType FsNodeType) error {
@@ -156,6 +160,7 @@ func (t *FsTree) CreateNode(parent *FsNode, name string, nodeType FsNodeType) er
 	}
 
 	parent.children = append(parent.children, newNode)
+	t.buildLines()
 	return nil
 }
 
@@ -169,6 +174,7 @@ func (t *FsTree) DeleteNode(node *FsNode) error {
 	}
 
 	parent.children = utils.RemoveFromSlice(parent.children, node)
+	t.buildLines()
 	return nil
 }
 
@@ -181,6 +187,7 @@ func (t *FsTree) ToggleExpand(node *FsNode) error {
 	}
 
 	node.expanded = !node.expanded
+	t.buildLines()
 	return nil
 }
 
@@ -192,11 +199,12 @@ func (t *FsTree) move(delta int) error {
 		return errors.New("delta must be either -1 (up) or 1 (down)")
 	}
 
-	newIndex := t.selected + delta
-	if newIndex < 1 || newIndex >= len(t.lines) {
+	newIndex := t.selectedLine + delta
+	if newIndex == -1 || t.lines[newIndex] == nil {
 		return nil // noop
 	}
-	t.selected = newIndex
+
+	t.selectedLine = newIndex
 	return nil
 }
 
@@ -204,10 +212,10 @@ func (t *FsTree) MoveUp() error   { return t.move(-1) }
 func (t *FsTree) MoveDown() error { return t.move(1) }
 
 func (t *FsTree) SelectNodeAtLine(line int) error {
-	if line < 0 || line >= len(t.lines) {
+	if line <= 0 || line >= len(t.lines) {
 		return errors.New("line number out of bounds")
 	}
-	t.selected = line
+	t.selectedLine = line
 	return nil
 }
 
@@ -239,13 +247,7 @@ func (t *FsTree) GetSelectedContent() (string, error) {
 	return string(contentBytes), nil
 }
 
-// Deprecated: Use View() instead as part of Bubble Tea model
-func (t *FsTree) Render(hoverLine int) string {
-	t.hoverLine = hoverLine
-	return t.View()
-}
-
-func (t *FsTree) renderNode(node *FsNode, depth int, builder *strings.Builder, hoverLine int, currentLine *int) {
+func (t *FsTree) renderNode(node *FsNode, depth int, builder *strings.Builder, currentLine *int) {
 	if node == nil {
 		return
 	}
@@ -267,9 +269,10 @@ func (t *FsTree) renderNode(node *FsNode, depth int, builder *strings.Builder, h
 	}
 
 	// highlight if selected or hovered
+	// note: the logic of lines cache needs to match render
 	fileName := node.FileName()
-	isSelected := node == t.selectedNode()
-	isHovered := hoverLine >= 0 && *currentLine == hoverLine
+	isSelected := *currentLine == t.selectedLine
+	isHovered := *currentLine == t.hoverLine
 
 	if isSelected {
 		fileName = lipgloss.NewStyle().Foreground(styles.Highlight).Bold(true).Render(fileName)
@@ -278,7 +281,6 @@ func (t *FsTree) renderNode(node *FsNode, depth int, builder *strings.Builder, h
 	}
 
 	line := icon + " " + fileName + "\n"
-	// the depth 0 is the dummy root node, I don't render that
 	if depth > 0 {
 		builder.WriteString(line)
 	}
@@ -286,7 +288,31 @@ func (t *FsTree) renderNode(node *FsNode, depth int, builder *strings.Builder, h
 
 	if node.expanded {
 		for _, child := range node.children {
-			t.renderNode(child, depth+1, builder, hoverLine, currentLine)
+			t.renderNode(child, depth+1, builder, currentLine)
+		}
+	}
+}
+
+// builds a cache of line num to rendered node in view
+func (t *FsTree) buildLines() {
+	t.lines = make(map[int]*FsNode)
+	line := -1
+	t.buildLinesRec(t.root, &line) // root has -1 depth and -1 index, as it's not meant to be rendered
+	// everything is a child of root
+}
+
+// Deprecated: isn't meant to be used directly
+func (t *FsTree) buildLinesRec(node *FsNode, currentLine *int) {
+	if node == nil {
+		return
+	}
+
+	t.lines[*currentLine] = node
+	(*currentLine)++
+
+	if node.expanded {
+		for _, child := range node.children {
+			t.buildLinesRec(child, currentLine)
 		}
 	}
 }
