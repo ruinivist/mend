@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -25,6 +26,27 @@ const (
 	FileNode FsNodeType = iota
 	FolderNode
 )
+
+// ==================== Message types ====================
+type Msg interface{}
+
+type MsgMoveUp struct{}
+type MsgMoveDown struct{}
+type MsgToggleExpand struct{}
+type MsgSelectAtLine struct {
+	Line int
+}
+type MsgCreateNode struct {
+	Parent   *FsNode
+	Name     string
+	NodeType FsNodeType
+}
+type MsgDeleteNode struct {
+	Node *FsNode
+}
+type MsgHover struct {
+	Line int
+}
 
 // ==================== FsNode definition ====================
 // a single node, Fs => deals with file system related info mostly
@@ -44,10 +66,45 @@ func (n *FsNode) FileName() string {
 
 // ==================== FsNode definition ====================
 type FsTree struct {
-	root     *FsNode
-	selected int
-	lines    []*FsNode // flattened view of nodes
+	root      *FsNode
+	selected  int
+	lines     []*FsNode // flattened view of nodes
+	hoverLine int       // for mouse hover highlighting
 }
+
+// ==================== Bubble Tea Interface Implementation ====================
+func (t *FsTree) Init() tea.Cmd {
+	return nil
+}
+
+func (t *FsTree) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch m := msg.(type) {
+	case MsgMoveUp:
+		_ = t.MoveUp()
+	case MsgMoveDown:
+		_ = t.MoveDown()
+	case MsgToggleExpand:
+		_ = t.ToggleSelectedExpand()
+	case MsgSelectAtLine:
+		_ = t.SelectNodeAtLine(m.Line)
+	case MsgCreateNode:
+		_ = t.CreateNode(m.Parent, m.Name, m.NodeType)
+	case MsgDeleteNode:
+		_ = t.DeleteNode(m.Node)
+	case MsgHover:
+		t.hoverLine = m.Line
+	}
+	return t, nil
+}
+
+func (t *FsTree) View() string {
+	builder := &strings.Builder{}
+	lineCounter := 0
+	t.renderNode(t.root, 0, builder, t.hoverLine, &lineCounter)
+	return builder.String()
+}
+
+// ==================== FsTree helper methods ====================
 
 func (t *FsTree) selectedNode() *FsNode {
 	if t.selected <= 0 || t.selected >= len(t.lines) {
@@ -182,11 +239,10 @@ func (t *FsTree) GetSelectedContent() (string, error) {
 	return string(contentBytes), nil
 }
 
+// Deprecated: Use View() instead as part of Bubble Tea model
 func (t *FsTree) Render(hoverLine int) string {
-	builder := &strings.Builder{}
-	lineCounter := 0
-	t.renderNode(t.root, 0, builder, hoverLine, &lineCounter)
-	return builder.String()
+	t.hoverLine = hoverLine
+	return t.View()
 }
 
 func (t *FsTree) renderNode(node *FsNode, depth int, builder *strings.Builder, hoverLine int, currentLine *int) {

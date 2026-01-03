@@ -2,11 +2,8 @@ package main
 
 import (
 	"fmt"
-	"mend/compositor"
 	fs "mend/fstree"
-	"mend/styles"
 	"os"
-	"time"
 
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/viewport"
@@ -44,11 +41,9 @@ type model struct {
 	tree           *fs.FsTree
 	// spinner needs to be state as I need to update the spinner on
 	// each tick in update func
-	spinner    spinner.Model
-	loading    bool
-	viewport   viewport.Model
-	hoverLine  int // track which line is being hovered
-	showDialog bool
+	spinner  spinner.Model
+	loading  bool
+	viewport viewport.Model
 }
 
 // initial model state
@@ -65,8 +60,6 @@ func createModel() model {
 		spinner:        s,
 		loading:        true,
 		viewport:       viewport.New(0, 0),
-		hoverLine:      -1, // no hover initially
-		showDialog:     false,
 	}
 }
 
@@ -78,7 +71,6 @@ type treeLoadedMsg struct {
 }
 
 func loadTreeCmd() tea.Msg {
-	time.Sleep(1 * time.Second) // delay sim
 
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -109,17 +101,18 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.spinner, cmd = m.spinner.Update(msg)
 		return m, cmd
 	case tea.MouseMsg:
-		// track hover for all mouse events within file tree
-		if msg.X < m.width {
-			m.hoverLine = msg.Y
-		} else {
-			m.hoverLine = -1
-		}
-
-		if msg.Button == tea.MouseButtonLeft {
-			// within file tree
+		if m.tree != nil {
+			// track hover for all mouse events within file tree
 			if msg.X < m.width {
-				if err := m.tree.SelectNodeAtLine(msg.Y); err == nil {
+				m.tree.Update(fs.MsgHover{Line: msg.Y})
+			} else {
+				m.tree.Update(fs.MsgHover{Line: -1})
+			}
+
+			if msg.Button == tea.MouseButtonLeft {
+				// within file tree
+				if msg.X < m.width {
+					m.tree.Update(fs.MsgSelectAtLine{Line: msg.Y})
 					content, err := m.tree.GetSelectedContent()
 					if err == nil {
 						m.viewport.SetContent(content)
@@ -131,30 +124,26 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "q", "ctrl+c":
 			return m, tea.Quit
-		case "d", "D":
-			m.showDialog = !m.showDialog
-			return m, nil
-		}
-
-		switch msg.String() {
 		case "up", "k":
-			if err := m.tree.MoveUp(); err != nil {
-				fmt.Println("Error moving up:", err)
+			if m.tree != nil {
+				m.tree.Update(fs.MsgMoveUp{})
 			}
 		case "down", "j":
-			if err := m.tree.MoveDown(); err != nil {
-				fmt.Println("Error moving down:", err)
+			if m.tree != nil {
+				m.tree.Update(fs.MsgMoveDown{})
 			}
 		case "enter", " ":
-			if err := m.tree.ToggleSelectedExpand(); err != nil {
-				fmt.Println("Error toggling expand:", err)
+			if m.tree != nil {
+				m.tree.Update(fs.MsgToggleExpand{})
 			}
 		case "l", "L":
-			content, err := m.tree.GetSelectedContent()
-			if err != nil {
-				fmt.Println("Error getting selected content:", err)
-			} else {
-				m.viewport.SetContent(content)
+			if m.tree != nil {
+				content, err := m.tree.GetSelectedContent()
+				if err != nil {
+					fmt.Println("Error getting selected content:", err)
+				} else {
+					m.viewport.SetContent(content)
+				}
 			}
 		}
 	}
@@ -162,47 +151,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) View() string {
-	var baseUI string
 	if m.loading {
-		baseUI = fmt.Sprintf("%s Loading files...", m.spinner.View())
-	} else {
-		left := lipgloss.NewStyle().
-			Width(m.width).
-			Render(m.tree.Render(m.hoverLine))
-
-		right := lipgloss.NewStyle().
-			Width(m.terminalWidth - m.width - 1).
-			Height(m.terminalHeight).
-			Render(m.viewport.View())
-
-		divider := lipgloss.NewStyle().
-			Width(1).
-			Height(m.terminalHeight).
-			Background(styles.Primary).
-			Render("")
-
-		baseUI = lipgloss.JoinHorizontal(lipgloss.Top, left, divider, right)
+		return fmt.Sprintf("%s Loading files...", m.spinner.View())
 	}
 
-	// no compositing needed, optimised return
-	if !m.showDialog {
-		return baseUI
-	}
-
-	// manual compositing
-	grid := compositor.NewGrid(m.terminalWidth, m.terminalHeight)
-	grid.Write(0, 0, baseUI)
-	dialog := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(styles.Primary).
-		Background(lipgloss.Color("#222")).
-		Foreground(lipgloss.Color("#FFF")).
-		Padding(1, 2).
-		Align(lipgloss.Center).
-		Render("this is a sample dialog\npress d to close")
-
-	grid.Write(2, 2, dialog)
-	return grid.Render()
+	return m.tree.View()
 }
 
 // =================== bubbletea ui fns ===================
