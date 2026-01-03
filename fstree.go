@@ -5,7 +5,7 @@ It is initialised at startup and used for state changes in UI and later persiste
 - ruinivist, 30Dec25
 */
 
-package fstree
+package main
 
 import (
 	"errors"
