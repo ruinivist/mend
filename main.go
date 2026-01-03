@@ -120,10 +120,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "q", "ctrl+c":
 			return m, tea.Quit
-		case "up", "k", "down", "j", "enter", " ":
-			if m.tree != nil {
-				m.tree.Update(msg)
-			}
+		}
+		if m.tree != nil {
+			m.tree.Update(msg)
 		}
 	}
 	return m, nil

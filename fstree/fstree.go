@@ -35,8 +35,8 @@ type FsNode struct {
 	children []*FsNode
 	parent   *FsNode // for fast traversal up the tree
 	expanded bool    // makes sense only for folder nodes
-	line     int
-	// in the flattree
+	// these are populated by buildLines for fast access
+	line int
 	prev *FsNode
 	next *FsNode
 }
@@ -68,7 +68,14 @@ func (t *FsTree) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			_ = t.MoveDown()
 		case "enter", " ":
 			_ = t.ToggleSelectedExpand()
+		case "n": // new file
+			_ = t.CreateNode(t.selectedNode, "new_file.txt", FileNode)
+		case "N": // new folder
+			_ = t.CreateNode(t.selectedNode, "new_folder", FolderNode)
+		case "C": // new root node
+			_ = t.CreateNode(t.root, "new_root_folder", FolderNode)
 		}
+
 	case tea.MouseMsg:
 		t.hoveredNode = t.lines[m.Y] // hover
 
@@ -101,8 +108,6 @@ func NewFsTree(rootPath string) *FsTree {
 		children: make([]*FsNode, 0),
 		expanded: true,
 	}
-	// root is at -1, rest all are 0 indexed, REM: this walk func does no handle spaces right now
-	// but since I use a map, it's easy to add
 	walkFileSystemAndBuildTree(rootPath, root)
 
 	tree := &FsTree{
@@ -113,30 +118,6 @@ func NewFsTree(rootPath string) *FsTree {
 	}
 	tree.buildLines()
 	return tree
-}
-
-func (t *FsTree) CreateNode(parent *FsNode, name string, nodeType FsNodeType) error {
-	if parent == nil {
-		return errors.New("parent node cannot be nil")
-	}
-	if parent.nodeType != FolderNode {
-		return errors.New("can only add nodes to folder nodes")
-	}
-	if name == "" {
-		return errors.New("node name cannot be empty")
-	}
-
-	newNode := &FsNode{
-		nodeType: nodeType,
-		path:     filepath.Join(parent.path, name),
-		children: make([]*FsNode, 0),
-		parent:   parent,
-		expanded: true,
-	}
-
-	parent.children = append(parent.children, newNode)
-	t.buildLines()
-	return nil
 }
 
 func (t *FsTree) DeleteNode(node *FsNode) error {
@@ -225,7 +206,7 @@ func (t *FsTree) renderNode(node *FsNode, depth int, builder *strings.Builder) {
 		}
 	case FileNode:
 		icon = styles.VerticalLine
-		icon = lipgloss.NewStyle().Faint(true).Render(prevIndent + icon + indent)
+		icon = lipgloss.NewStyle().Faint(true).Render(prevIndent + icon + " ")
 	}
 
 	// highlight if selected or hovered
@@ -294,4 +275,44 @@ func (t *FsTree) buildLinesRec(node *FsNode, depth int, currentLine *int, flatTr
 			t.buildLinesRec(child, depth+1, currentLine, flatTree)
 		}
 	}
+}
+
+func (t *FsTree) CreateNode(folder *FsNode, name string, nodeType FsNodeType) error {
+	if folder == nil {
+		return errors.New("folder node cannot be nil")
+	}
+
+	if folder.nodeType == FileNode {
+		folder = folder.parent
+	}
+
+	if folder.nodeType != FolderNode {
+		return errors.New("parent node must be a folder. this should not be allowed by ui")
+	}
+
+	if name == "" {
+		return errors.New("node name cannot be empty")
+	}
+
+	path := filepath.Join(folder.path, name)
+	expanded := false
+	if nodeType == FolderNode {
+		expanded = true
+	}
+	newNode := &FsNode{
+		nodeType: nodeType,
+		path:     path,
+		children: make([]*FsNode, 0),
+		parent:   folder,
+		expanded: expanded,
+	}
+	// files are first of children, folder last of children
+	if nodeType == FileNode {
+		folder.children = append([]*FsNode{newNode}, folder.children...)
+	} else {
+		folder.children = append(folder.children, newNode)
+	}
+	t.selectedNode = newNode
+	t.buildLines()
+	return nil
 }
