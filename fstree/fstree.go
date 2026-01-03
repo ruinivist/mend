@@ -120,33 +120,35 @@ func (t *FsTree) View() string {
 		return t.errMsg
 	}
 
+	if len(t.root.children) == 0 {
+		return "no files/folders\nPress C to create"
+	}
+
 	builder := &strings.Builder{}
 	t.renderNode(t.root, 0, builder)
 	rendered := builder.String()
 
 	// clamp to height around selected node
-	if t.selectedNode != nil {
-		lines := strings.Split(rendered, "\n")
-		totalLines := len(lines)
-		selectedLine := t.selectedNode.line
+	lines := strings.Split(rendered, "\n")
+	totalLines := len(lines)
+	selectedLine := t.selectedNode.line
 
-		halfHeight := t.height / 2
-		startLine := selectedLine - halfHeight
+	halfHeight := t.height / 2
+	startLine := selectedLine - halfHeight
+	if startLine < 0 {
+		startLine = 0
+	}
+	endLine := startLine + t.height
+	if endLine > totalLines {
+		endLine = totalLines
+		startLine = endLine - t.height
 		if startLine < 0 {
 			startLine = 0
 		}
-		endLine := startLine + t.height
-		if endLine > totalLines {
-			endLine = totalLines
-			startLine = endLine - t.height
-			if startLine < 0 {
-				startLine = 0
-			}
-		}
-
-		clampedLines := lines[startLine:endLine]
-		rendered = strings.Join(clampedLines, "\n")
 	}
+
+	clampedLines := lines[startLine:endLine]
+	rendered = strings.Join(clampedLines, "\n")
 
 	return rendered
 }
@@ -351,6 +353,8 @@ func (t *FsTree) CreateNode(folder *FsNode, name string, nodeType FsNodeType) er
 
 	if folder.nodeType != FolderNode {
 		return errors.New("parent node must be a folder. this should not be allowed by ui")
+	} else if folder.nodeType == FolderNode && !folder.expanded {
+		folder.expanded = true
 	}
 
 	if name == "" {
