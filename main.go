@@ -98,12 +98,20 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.terminalWidth = msg.Width
 		m.terminalHeight = msg.Height
-		m.viewport.Width = msg.Width - m.width - 1
-		m.viewport.Height = msg.Height
+		if m.tree != nil {
+			m.tree.Update(tea.WindowSizeMsg{
+				Height: m.terminalHeight,
+				Width:  m.terminalWidth,
+			})
+		}
 		return m, nil
 	case treeLoadedMsg:
 		m.tree = msg.tree
 		m.loading = false
+		m.tree.Update(tea.WindowSizeMsg{
+			Height: m.terminalHeight,
+			Width:  m.terminalWidth,
+		})
 		return m, nil
 	case spinner.TickMsg:
 		var cmd tea.Cmd
