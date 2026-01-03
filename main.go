@@ -248,12 +248,19 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-		// Forward mouse input to tree only if not dragging
-		var cmd tea.Cmd
-		if m.tree != nil && !m.isDragging {
-			_, cmd = m.tree.Update(msg)
+		// Forward mouse input to children if not dragging
+		var cmds []tea.Cmd
+		if !m.isDragging {
+			if m.tree != nil && msg.X < m.fsTreeWidth {
+				_, cmd := m.tree.Update(msg)
+				cmds = append(cmds, cmd)
+			}
+			if msg.X > m.fsTreeWidth {
+				_, cmd := m.noteView.Update(msg)
+				cmds = append(cmds, cmd)
+			}
 		}
-		return m, cmd
+		return m, tea.Batch(cmds...)
 	}
 
 	return m, nil
