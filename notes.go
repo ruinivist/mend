@@ -82,6 +82,18 @@ func (m *NoteView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "a":
 			m.viewState = StateHints
 			m.vp.SetContent(m.renderNote())
+		case "up":
+			m.vp.ScrollUp(1)
+			return m, nil
+		case "down":
+			m.vp.ScrollDown(1)
+			return m, nil
+		case "pgup":
+			m.vp.PageUp()
+			return m, nil
+		case "pgdown":
+			m.vp.PageDown()
+			return m, nil
 		}
 		var cmd tea.Cmd
 		m.vp, cmd = m.vp.Update(msg)
