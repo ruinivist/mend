@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/glamour"
@@ -26,16 +27,20 @@ const (
 
 type NoteView struct {
 	// the actual content
-	path    string
-	title   string   // the first line is always # title
-	content string   // strip the first line from file rest is content
-	hints   []string //a hint is anything that matches (hint: <text>) in content
+	path       string
+	title      string   // the first line is always # title
+	content    string   // strip the first line from file rest is content
+	rawContent string   // full content for editing
+	hints      []string //a hint is anything that matches (hint: <text>) in content
 	// display layer
 	err        error
 	loading    bool
 	vp         viewport.Model
 	mdRenderer *glamour.TermRenderer
 	viewState  ViewState
+	// editing
+	textarea  textarea.Model
+	isEditing bool
 }
 
 // ================== messages ===================
@@ -44,10 +49,11 @@ type loadNote struct {
 }
 
 type loadedNote struct {
-	title   string
-	content string
-	hints   []string
-	err     error
+	title      string
+	content    string
+	rawContent string
+	hints      []string
+	err        error
 }
 
 func NewNoteView() *NoteView {
@@ -55,16 +61,23 @@ func NewNoteView() *NoteView {
 		glamour.WithAutoStyle(),
 		glamour.WithWordWrap(80),
 	)
+	ta := textarea.New()
+	ta.Focus()
 	return &NoteView{
 		loading:    true,
 		mdRenderer: mdRenderer,
 		vp:         viewport.New(0, 0),
 		viewState:  StateTitleOnly,
+		textarea:   ta,
 	}
 }
 
 func (m *NoteView) Init() tea.Cmd {
-	return nil
+	return textarea.Blink
+}
+
+func (m *NoteView) IsEditing() bool {
+	return m.isEditing
 }
 
 func (m *NoteView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -72,22 +85,38 @@ func (m *NoteView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.vp.Width = msg.Width
 		m.vp.Height = msg.Height
+		m.textarea.SetWidth(msg.Width)
+		m.textarea.SetHeight(msg.Height)
 		return m, nil
 
 	case tea.KeyMsg:
+		if m.isEditing {
+			switch msg.String() {
+			case "ctrl+w":
+				m.isEditing = false
+				return m, nil
+			case "ctrl+s":
+				return m, saveContent(m.path, m.textarea.Value())
+			}
+			var cmd tea.Cmd
+			m.textarea, cmd = m.textarea.Update(msg)
+			return m, cmd
+		}
+
 		switch msg.String() {
-		case "d":
+		case "enter":
+			if m.path != "" && !m.loading {
+				m.isEditing = true
+				m.textarea.SetValue(m.rawContent)
+				m.textarea.Focus()
+				return m, textarea.Blink
+			}
+		case "d", "right":
 			m.viewState = StateContent
 			m.vp.SetContent(m.renderNote())
-		case "a":
+		case "a", "left":
 			m.viewState = StateHints
 			m.vp.SetContent(m.renderNote())
-		case "up":
-			m.vp.ScrollUp(1)
-			return m, nil
-		case "down":
-			m.vp.ScrollDown(1)
-			return m, nil
 		case "pgup":
 			m.vp.PageUp()
 			return m, nil
@@ -104,6 +133,7 @@ func (m *NoteView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil //noop
 		}
 		m.path = msg.path
+		m.isEditing = false
 		m.loading = true
 		return m, fetchContent(msg.path)
 
@@ -111,13 +141,18 @@ func (m *NoteView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.loading = false
 		m.title = msg.title
 		m.content = msg.content
+		m.rawContent = msg.rawContent
 		m.hints = msg.hints
 		m.err = msg.err
 		m.viewState = StateTitleOnly
 		m.vp.SetContent(m.renderNote())
+
 		return m, nil
 
 	case tea.MouseMsg:
+		if m.isEditing {
+			return m, nil // or handle mouse in textarea if supported
+		}
 		var cmd tea.Cmd
 		m.vp, cmd = m.vp.Update(msg)
 		return m, cmd
@@ -134,6 +169,10 @@ func (m NoteView) View() string {
 		return "Error: " + m.err.Error()
 	}
 
+	if m.isEditing {
+		return m.textarea.View()
+	}
+
 	return m.vp.View()
 }
 
@@ -144,7 +183,8 @@ func fetchContent(path string) tea.Cmd {
 			return loadedNote{err: err}
 		}
 
-		content := string(data)
+		rawContent := string(data)
+		content := rawContent
 		lines := strings.Split(content, "\n")
 
 		var title string
@@ -160,10 +200,21 @@ func fetchContent(path string) tea.Cmd {
 		content = strings.TrimSpace(content)
 
 		return loadedNote{
-			title:   title,
-			content: content,
-			hints:   hints,
+			title:      title,
+			content:    content,
+			rawContent: rawContent,
+			hints:      hints,
 		}
+	}
+}
+
+func saveContent(path, content string) tea.Cmd {
+	return func() tea.Msg {
+		err := os.WriteFile(path, []byte(content), 0644)
+		if err != nil {
+			return loadedNote{err: err}
+		}
+		return fetchContent(path)()
 	}
 }
 
@@ -203,7 +254,7 @@ func (m NoteView) renderNote() string {
 			body, err2 = m.mdRenderer.Render(hintsList)
 		}
 	case StateTitleOnly:
-		body = "\n(Press 'space' to show content, 'h' to show hints)"
+		body = "'a' to view hints, 'd' to view content."
 	}
 
 	if err2 != nil {
