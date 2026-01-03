@@ -44,13 +44,15 @@ type model struct {
 	isDragging        bool
 	isHoveringDivider bool
 	contentHeight     int
+	showStatusBar     bool
 }
 
 func NewModel(rootPath string) *model {
 	return &model{
-		rootPath: rootPath,
-		loading:  true,
-		noteView: NewNoteView(),
+		rootPath:      rootPath,
+		loading:       true,
+		noteView:      NewNoteView(),
+		showStatusBar: true,
 	}
 }
 
@@ -82,7 +84,12 @@ func (m *model) layout(width, height int) {
 	m.terminalWidth = width
 	m.terminalHeight = height
 	m.fsTreeWidth, m.noteViewWidth = calculateLayout(width, m.fsTreeWidth)
-	m.contentHeight = max(0, height-statusBarHeight)
+
+	h := height
+	if m.showStatusBar {
+		h -= statusBarHeight
+	}
+	m.contentHeight = max(0, h)
 }
 
 func (m *model) Init() tea.Cmd {
@@ -134,6 +141,24 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "q", "ctrl+c":
 			return m, tea.Quit
+		case "i":
+			m.showStatusBar = !m.showStatusBar
+			m.layout(m.terminalWidth, m.terminalHeight)
+
+			var cmds []tea.Cmd
+			if m.tree != nil {
+				_, cmd := m.tree.Update(tea.WindowSizeMsg{
+					Width:  m.fsTreeWidth,
+					Height: m.contentHeight,
+				})
+				cmds = append(cmds, cmd)
+			}
+			_, cmd := m.noteView.Update(tea.WindowSizeMsg{
+				Width:  m.noteViewWidth,
+				Height: m.contentHeight,
+			})
+			cmds = append(cmds, cmd)
+			return m, tea.Batch(cmds...)
 		}
 
 		var cmds []tea.Cmd
@@ -238,6 +263,10 @@ func (m model) View() string {
 		divider,
 		notes,
 	)
+
+	if !m.showStatusBar {
+		return full
+	}
 
 	statusBar := lipgloss.NewStyle().
 		Width(m.terminalWidth - 2). // Subtract borders
