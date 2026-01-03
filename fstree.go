@@ -42,7 +42,11 @@ type FsNode struct {
 }
 
 func (n *FsNode) FileName() string {
-	return filepath.Base(n.path)
+	name := filepath.Base(n.path)
+	if n.nodeType == FileNode {
+		return strings.TrimSuffix(name, ".md")
+	}
+	return name
 }
 
 // ================== messages ===================
@@ -423,6 +427,10 @@ func (t *FsTree) CreateNode(folder *FsNode, name string, nodeType FsNodeType) er
 
 	if name == "" {
 		return errors.New("node name cannot be empty")
+	}
+
+	if nodeType == FileNode && !strings.HasSuffix(name, ".md") {
+		name += ".md"
 	}
 
 	path := filepath.Join(folder.path, name)
