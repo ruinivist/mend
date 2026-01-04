@@ -224,7 +224,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.layout(m.terminalWidth, m.terminalHeight)
 			return m, m.resizeChildren()
 		case "o":
-			if m.tree != nil && m.tree.selectedNode != nil {
+			if m.tree != nil && m.tree.selectedNode != nil && m.tree.selectedNode.nodeType == FileNode {
 				c := exec.Command("micro", m.tree.selectedNode.path)
 				c.Stdin = os.Stdin
 				c.Stdout = os.Stdout
