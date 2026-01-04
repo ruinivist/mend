@@ -7,6 +7,7 @@ const (
 	dividerWidth      = 1
 	dragHitArea       = 2 // +/- chars around divider
 	fsTreeStartOffset = 1
+	statusBarHeight   = 3
 )
 
 // calculateLayout computes the widths for the file tree and note view
