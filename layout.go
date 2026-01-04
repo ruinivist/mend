@@ -2,12 +2,13 @@ package main
 
 // layout constants
 const (
-	minFsTreeWidth    = 5
-	minNoteViewWidth  = 10
-	dividerWidth      = 1
-	dragHitArea       = 2 // +/- chars around divider
-	fsTreeStartOffset = 0 // there's bug when this is not 0 and the terminal height is small; I don't want to bother
-	statusBarHeight   = 3
+	minFsTreeWidth     = 5
+	minNoteViewWidth   = 10
+	dividerWidth       = 1
+	dragHitArea        = 2 // +/- chars around divider
+	fsTreeStartOffset  = 0 // there's bug when this is not 0 and the terminal height is small; I don't want to bother
+	statusBarHeight    = 3
+	fsTreeWidthPercent = 15
 )
 
 // calculateLayout computes the widths for the file tree and note view
@@ -16,7 +17,7 @@ func calculateLayout(totalWidth, requestedTreeWidth int) (treeWidth, noteWidth i
 	treeWidth = requestedTreeWidth
 
 	if treeWidth == 0 {
-		treeWidth = totalWidth / 4
+		treeWidth = totalWidth * fsTreeWidthPercent / 100
 	}
 
 	maxTreeWidth := totalWidth - dividerWidth - minNoteViewWidth

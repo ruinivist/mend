@@ -16,6 +16,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/glamour"
+	glStyles "github.com/charmbracelet/glamour/styles"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
@@ -66,7 +67,7 @@ type loadedNote struct {
 
 func NewNoteView() *NoteView {
 	mdRenderer, _ := glamour.NewTermRenderer(
-		glamour.WithAutoStyle(),
+		glamour.WithStylePath(glStyles.TokyoNightStyle),
 		glamour.WithWordWrap(80),
 	)
 	ta := textarea.New()
