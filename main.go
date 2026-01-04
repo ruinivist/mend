@@ -73,14 +73,14 @@ func (m *model) loadTreeCmd(path string) tea.Cmd {
 		} else {
 			targetPath = path
 		}
-		return treeLoadedMsg{tree: NewFsTree(targetPath)}
+		return treeLoadedMsg{tree: NewFsTree(targetPath, fsTreeStartOffset)}
 	}
 }
 
 func (m *model) layout(width, height int) {
 	m.terminalWidth = width
 	m.terminalHeight = height
-	
+
 	m.fsTreeWidth, m.noteViewWidth = calculateLayout(width, m.fsTreeWidth)
 }
 
@@ -134,7 +134,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "q", "ctrl+c":
 			return m, tea.Quit
 		}
-		
+
 		var cmds []tea.Cmd
 
 		// Forward keyboard input to tree
@@ -206,6 +206,7 @@ func (m model) View() string {
 		Height(m.terminalHeight).
 		Width(m.fsTreeWidth).
 		Align(lipgloss.Left).
+		PaddingTop(fsTreeStartOffset).
 		PaddingRight(1).
 		Render(tree)
 

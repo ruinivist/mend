@@ -2,10 +2,11 @@ package main
 
 // layout constants
 const (
-	minFsTreeWidth   = 5
-	minNoteViewWidth = 10
-	dividerWidth     = 1
-	dragHitArea      = 2 // +/- chars around divider
+	minFsTreeWidth    = 5
+	minNoteViewWidth  = 10
+	dividerWidth      = 1
+	dragHitArea       = 2 // +/- chars around divider
+	fsTreeStartOffset = 1
 )
 
 // calculateLayout computes the widths for the file tree and note view

@@ -62,6 +62,7 @@ type FsTree struct {
 	viewStart    int
 	viewEnd      int
 	oldSelected  *FsNode
+	startOffset  int
 }
 
 // ==================== Bubble Tea Interface Implementation ====================
@@ -106,7 +107,7 @@ func (t *FsTree) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case tea.MouseMsg:
-		m.Y += t.viewStart // adjust for viewport
+		m.Y += t.viewStart - t.startOffset // adjust for viewport
 		if m.X >= t.width {
 			break
 		}
@@ -184,7 +185,7 @@ func (t *FsTree) View() string {
 
 // ==================== FsTree helper methods ====================
 
-func NewFsTree(rootPath string) *FsTree {
+func NewFsTree(rootPath string, startOffset int) *FsTree {
 	root := &FsNode{
 		nodeType: FolderNode,
 		path:     rootPath,
@@ -194,7 +195,8 @@ func NewFsTree(rootPath string) *FsTree {
 	walkFileSystemAndBuildTree(rootPath, root)
 
 	tree := &FsTree{
-		root: root,
+		root:        root,
+		startOffset: startOffset,
 	}
 	if len(root.children) > 0 {
 		tree.selectedNode = root.children[0]
