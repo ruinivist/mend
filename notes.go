@@ -111,11 +111,15 @@ func (m *NoteView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.textarea.Focus()
 				return m, textarea.Blink
 			}
-		case "d", "right":
-			m.viewState = StateContent
-			m.vp.SetContent(m.renderNote())
-		case "a", "left":
-			m.viewState = StateHints
+		case " ":
+			switch m.viewState {
+			case StateTitleOnly:
+				m.viewState = StateHints
+			case StateHints:
+				m.viewState = StateContent
+			case StateContent:
+				m.viewState = StateTitleOnly
+			}
 			m.vp.SetContent(m.renderNote())
 		case "pgup":
 			m.vp.PageUp()
