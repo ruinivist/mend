@@ -202,6 +202,12 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 
+		// If editing, forward all keys to noteView and ignore global bindings
+		if m.noteView.IsEditing() {
+			_, cmd := m.noteView.Update(msg)
+			return m, cmd
+		}
+
 		switch msg.String() {
 		case "q", "ctrl+c":
 			return m, tea.Quit

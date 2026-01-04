@@ -101,11 +101,11 @@ func (t *FsTree) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		t.errMsg = ""
 		switch m.String() {
-		case "w":
+		case "w", "up":
 			_ = t.MoveUp()
-		case "s":
+		case "s", "down":
 			_ = t.MoveDown()
-		case "e":
+		case "e", "space":
 			_ = t.ToggleSelectedExpand()
 		case "n": // new file
 			return t, func() tea.Msg { return RequestInputMsg{Action: ActionNewFile} }
