@@ -237,51 +237,47 @@ func parseSections(source []byte) []Section {
 	reader := text.NewReader(source)
 	doc := md.Parser().Parse(reader)
 
-	var sections []Section
-	var currentTitle string
-	var currentStart int = -1
+	title := "no title"
+	sections := make([]Section, 0)
+	lastPos := 0
 
 	for child := doc.FirstChild(); child != nil; child = child.NextSibling() {
 		if child.Kind() == ast.KindHeading {
-			heading := child.(*ast.Heading)
-
-			if currentStart != -1 {
-				headingStart := heading.Lines().At(0).Start
-				if headingStart > currentStart {
-					sectionContentRaw := string(source[currentStart:headingStart])
-					sectionContent := strings.TrimSpace(sectionContentRaw)
-					sections = append(sections, Section{
-						Title:   currentTitle,
-						Content: sectionContent,
-						Hints:   extractHints(sectionContent),
-					})
-				}
+			if child.Lines().Len() <= 0 {
+				continue
 			}
 
-			if heading.Lines().Len() > 0 {
-				start := heading.Lines().At(0).Start
-				stop := heading.Lines().At(heading.Lines().Len() - 1).Stop
-				currentTitle = string(source[start:stop])
-				currentStart = stop
-			} else {
-				currentTitle = string(heading.Text(source))
-				currentStart = -1
-			}
+			level := child.(*ast.Heading).Level
+			headingStart := child.Lines().At(0).Start - level - 1
+			headingEnd := child.Lines().At(child.Lines().Len() - 1).Stop
 
-		} else {
-			if currentStart == -1 {
-				currentStart = 0
+			contentEnd := headingStart
+			if lastPos < contentEnd {
+				// you have a heading and a content to accumulte over
+				contentsRaw := source[lastPos:contentEnd]
+				contents := strings.TrimSpace(string(contentsRaw))
+				hints := extractHints(contents)
+				sections = append(sections, Section{
+					Title:   title,
+					Content: contents,
+					Hints:   hints,
+				})
+				lastPos = headingEnd
 			}
+			// for the next heading
+			title = strings.TrimSpace(string(source[headingStart:headingEnd]))
+			lastPos = headingEnd
 		}
 	}
-
-	if currentStart != -1 && currentStart < len(source) {
-		sectionContentRaw := string(source[currentStart:])
-		sectionContent := strings.TrimSpace(sectionContentRaw)
+	// last section
+	if lastPos < len(source) {
+		contentsRaw := source[lastPos:]
+		contents := strings.TrimSpace(string(contentsRaw))
+		hints := extractHints(contents)
 		sections = append(sections, Section{
-			Title:   currentTitle,
-			Content: sectionContent,
-			Hints:   extractHints(sectionContent),
+			Title:   title,
+			Content: contents,
+			Hints:   hints,
 		})
 	}
 
