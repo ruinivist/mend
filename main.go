@@ -148,6 +148,9 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case loadNote:
 		_, cmd := m.noteView.Update(msg)
+		if msg.force {
+			return m, tea.Batch(cmd, tea.EnableMouseAllMotion)
+		}
 		return m, cmd
 
 	case loadedNote:
@@ -227,6 +230,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				c.Stdout = os.Stdout
 				c.Stderr = os.Stderr
 				return m, tea.ExecProcess(c, func(err error) tea.Msg {
+					// mouse loses focus so this is neededd
 					return loadNote{path: m.tree.selectedNode.path, force: true}
 				})
 			}
