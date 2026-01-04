@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/exec"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -145,6 +146,10 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		_, cmd := m.noteView.Update(loadNote{path: msg.path})
 		return m, cmd
 
+	case loadNote:
+		_, cmd := m.noteView.Update(msg)
+		return m, cmd
+
 	case loadedNote:
 		// Forward loaded note to noteView
 		_, cmd := m.noteView.Update(msg)
@@ -215,6 +220,16 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.showStatusBar = !m.showStatusBar
 			m.layout(m.terminalWidth, m.terminalHeight)
 			return m, m.resizeChildren()
+		case "o":
+			if m.tree != nil && m.tree.selectedNode != nil {
+				c := exec.Command("micro", m.tree.selectedNode.path)
+				c.Stdin = os.Stdin
+				c.Stdout = os.Stdout
+				c.Stderr = os.Stderr
+				return m, tea.ExecProcess(c, func(err error) tea.Msg {
+					return loadNote{path: m.tree.selectedNode.path, force: true}
+				})
+			}
 		}
 
 		var cmds []tea.Cmd
