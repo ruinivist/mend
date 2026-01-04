@@ -45,6 +45,11 @@ func (n *FsNode) FileName() string {
 	return filepath.Base(n.path)
 }
 
+// ================== messages ===================
+type nodeSelected struct {
+	path string
+}
+
 // ==================== FsNode definition ====================
 type FsTree struct {
 	root         *FsNode
@@ -54,6 +59,9 @@ type FsTree struct {
 	errMsg       string
 	height       int
 	width        int
+	viewStart    int
+	viewEnd      int
+	oldSelected  *FsNode
 }
 
 // ==================== Bubble Tea Interface Implementation ====================
@@ -98,6 +106,10 @@ func (t *FsTree) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case tea.MouseMsg:
+		m.Y += t.viewStart // adjust for viewport
+		if m.X >= t.width {
+			break
+		}
 		t.errMsg = ""
 		t.hoveredNode = t.lines[m.Y] // hover
 
@@ -112,7 +124,37 @@ func (t *FsTree) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 	}
+
+	t.viewStart, t.viewEnd = t.getViewportBounds(len(t.lines))
+
+	if t.oldSelected != t.selectedNode {
+		t.oldSelected = t.selectedNode
+		return t, func() tea.Msg {
+			return nodeSelected{path: t.selectedNode.path}
+		}
+	}
 	return t, nil
+}
+
+func (t *FsTree) getViewportBounds(totalLines int) (startLine, endLine int) {
+	selectedLine := t.selectedNode.line
+	halfHeight := t.height / 2
+
+	startLine = selectedLine - halfHeight
+	if startLine < 0 {
+		startLine = 0
+	}
+
+	endLine = startLine + t.height
+	if endLine > totalLines {
+		endLine = totalLines
+		startLine = endLine - t.height
+		if startLine < 0 {
+			startLine = 0
+		}
+	}
+
+	return startLine, endLine
 }
 
 func (t *FsTree) View() string {
@@ -128,27 +170,14 @@ func (t *FsTree) View() string {
 	t.renderNode(t.root, 0, builder)
 	rendered := builder.String()
 
-	// clamp to height around selected node
 	lines := strings.Split(rendered, "\n")
-	totalLines := len(lines)
-	selectedLine := t.selectedNode.line
 
-	halfHeight := t.height / 2
-	startLine := selectedLine - halfHeight
-	if startLine < 0 {
-		startLine = 0
-	}
-	endLine := startLine + t.height
-	if endLine > totalLines {
-		endLine = totalLines
-		startLine = endLine - t.height
-		if startLine < 0 {
-			startLine = 0
-		}
-	}
-
-	clampedLines := lines[startLine:endLine]
+	clampedLines := lines[t.viewStart:t.viewEnd]
 	rendered = strings.Join(clampedLines, "\n")
+
+	rendered = lipgloss.NewStyle().
+		Width(t.width).
+		Render(rendered)
 
 	return rendered
 }
@@ -363,12 +392,13 @@ func (t *FsTree) CreateNode(folder *FsNode, name string, nodeType FsNodeType) er
 
 	path := filepath.Join(folder.path, name)
 	// materialise it first
-	if nodeType == FileNode {
+	switch nodeType {
+	case FileNode:
 		err := createFile(path, []byte{})
 		if err != nil {
 			return err
 		}
-	} else if nodeType == FolderNode {
+	case FolderNode:
 		err := createFolder(path)
 		if err != nil {
 			return err
