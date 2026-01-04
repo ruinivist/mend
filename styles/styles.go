@@ -12,19 +12,10 @@ import "github.com/charmbracelet/lipgloss"
 // ==================== colors ====================
 var (
 	Primary        = lipgloss.Color("#7D56F4")
-	Secondary      = lipgloss.Color("#FF5C8F")
-	Background     = lipgloss.Color("#1E1E2E")
-	Highlight      = lipgloss.Color("#FFA500") // Orange highlight for selected node
-	HoverHighlight = lipgloss.Color("#4ECDC4") // Teal highlight for hovered node
+	Highlight      = lipgloss.Color("#89DDFF")
+	HoverHighlight = lipgloss.Color("#91B4D5")
 	// TODO: to extend as needed, right now this is just a
 	// placeholder
-)
-
-// ==================== lipgloss styles ====================
-var (
-	DividerStyle = lipgloss.NewStyle().
-		Width(1).
-		Background(Primary)
 )
 
 // ==================== icons ====================
