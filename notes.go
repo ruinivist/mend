@@ -43,6 +43,7 @@ type loadedNote struct {
 func NewNoteView() *NoteView {
 	mdRenderer, _ := glamour.NewTermRenderer(
 		glamour.WithAutoStyle(),
+		glamour.WithWordWrap(80),
 	)
 	return &NoteView{
 		loading:    true,
@@ -108,7 +109,7 @@ func fetchContent(path string) tea.Cmd {
 
 		// title
 		if len(lines) > 0 && strings.HasPrefix(lines[0], "# ") {
-			title = strings.TrimPrefix(lines[0], "# ")
+			title = lines[0]
 			content = strings.Join(lines[1:], "\n")
 		}
 
@@ -138,5 +139,5 @@ func (m NoteView) renderNote() string {
 		return m.title + "\n\n" + m.content
 	}
 
-	return title + "\n\n" + content
+	return title + content
 }
