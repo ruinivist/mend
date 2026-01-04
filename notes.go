@@ -64,7 +64,7 @@ func NewNoteView() *NoteView {
 	ta := textarea.New()
 	ta.Focus()
 	return &NoteView{
-		loading:    true,
+		loading:    false,
 		mdRenderer: mdRenderer,
 		vp:         viewport.New(0, 0),
 		viewState:  StateTitleOnly,
@@ -162,7 +162,7 @@ func (m *NoteView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m NoteView) View() string {
 	if m.loading {
-		return "Loading note..."
+		return "loading..."
 	}
 
 	if m.err != nil {
@@ -256,7 +256,8 @@ func (m NoteView) renderNote() string {
 			body, err2 = m.mdRenderer.Render(hintsList)
 		}
 	case StateTitleOnly:
-		body = "'a' to view hints, 'd' to view content."
+		body = "" // TOOD: there was a message here but I removed it, maybe remove enum entry as well
+		// or improve this part ui
 	}
 
 	if err2 != nil {
