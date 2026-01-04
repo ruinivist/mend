@@ -101,9 +101,9 @@ func (t *FsTree) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		t.errMsg = ""
 		switch m.String() {
-		case "up", "w":
+		case "w":
 			_ = t.MoveUp()
-		case "down", "s":
+		case "s":
 			_ = t.MoveDown()
 		case "e":
 			_ = t.ToggleSelectedExpand()
