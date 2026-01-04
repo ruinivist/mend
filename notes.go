@@ -104,6 +104,11 @@ func (m *NoteView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.viewState = StateTitleOnly
 		m.vp.SetContent(m.renderNote())
 		return m, nil
+
+	case tea.MouseMsg:
+		var cmd tea.Cmd
+		m.vp, cmd = m.vp.Update(msg)
+		return m, cmd
 	}
 	return m, nil
 }
