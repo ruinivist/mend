@@ -15,7 +15,16 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/glamour"
+	"github.com/yuin/goldmark"
+	"github.com/yuin/goldmark/ast"
+	"github.com/yuin/goldmark/text"
 )
+
+type Section struct {
+	Title   string
+	Content string
+	Hints   []string
+}
 
 type ViewState int
 
@@ -28,10 +37,8 @@ const (
 type NoteView struct {
 	// the actual content
 	path       string
-	title      string   // the first line is always # title
-	content    string   // strip the first line from file rest is content
 	rawContent string   // full content for editing
-	hints      []string //a hint is anything that matches **text** or __text__ in content
+	sections   []Section
 	// display layer
 	err        error
 	loading    bool
@@ -49,10 +56,8 @@ type loadNote struct {
 }
 
 type loadedNote struct {
-	title      string
-	content    string
 	rawContent string
-	hints      []string
+	sections   []Section
 	err        error
 }
 
@@ -143,10 +148,8 @@ func (m *NoteView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case loadedNote:
 		m.loading = false
-		m.title = msg.title
-		m.content = msg.content
 		m.rawContent = msg.rawContent
-		m.hints = msg.hints
+		m.sections = msg.sections
 		m.err = msg.err
 		m.viewState = StateTitleOnly
 		m.vp.SetContent(m.renderNote())
@@ -188,28 +191,69 @@ func fetchContent(path string) tea.Cmd {
 		}
 
 		rawContent := string(data)
-		content := rawContent
-		lines := strings.Split(content, "\n")
-
-		var title string
-
-		// title
-		if len(lines) > 0 && strings.HasPrefix(lines[0], "# ") {
-			title = lines[0]
-			content = strings.Join(lines[1:], "\n")
-		}
-
-		// hints
-		hints := extractHints(content)
-		content = strings.TrimSpace(content)
+		sections := parseSections(data)
 
 		return loadedNote{
-			title:      title,
-			content:    content,
 			rawContent: rawContent,
-			hints:      hints,
+			sections:   sections,
 		}
 	}
+}
+
+func parseSections(source []byte) []Section {
+	md := goldmark.New()
+	reader := text.NewReader(source)
+	doc := md.Parser().Parse(reader)
+
+	var sections []Section
+	var currentTitle string
+	var currentStart int = -1
+
+	for child := doc.FirstChild(); child != nil; child = child.NextSibling() {
+		if child.Kind() == ast.KindHeading {
+			heading := child.(*ast.Heading)
+
+			if currentStart != -1 {
+				headingStart := heading.Lines().At(0).Start
+				if headingStart > currentStart {
+					sectionContentRaw := string(source[currentStart:headingStart])
+					sectionContent := strings.TrimSpace(sectionContentRaw)
+					sections = append(sections, Section{
+						Title:   currentTitle,
+						Content: sectionContent,
+						Hints:   extractHints(sectionContent),
+					})
+				}
+			}
+
+			if heading.Lines().Len() > 0 {
+				start := heading.Lines().At(0).Start
+				stop := heading.Lines().At(heading.Lines().Len() - 1).Stop
+				currentTitle = string(source[start:stop])
+				currentStart = stop
+			} else {
+				currentTitle = string(heading.Text(source))
+				currentStart = -1
+			}
+
+		} else {
+			if currentStart == -1 {
+				currentStart = 0
+			}
+		}
+	}
+
+	if currentStart != -1 && currentStart < len(source) {
+		sectionContentRaw := string(source[currentStart:])
+		sectionContent := strings.TrimSpace(sectionContentRaw)
+		sections = append(sections, Section{
+			Title:   currentTitle,
+			Content: sectionContent,
+			Hints:   extractHints(sectionContent),
+		})
+	}
+
+	return sections
 }
 
 func saveContent(path, content string) tea.Cmd {
@@ -237,9 +281,17 @@ func extractHints(content string) []string {
 }
 
 func (m NoteView) renderNote() string {
-	title, err1 := m.mdRenderer.Render(m.title)
+	var titleText, contentText string
+	if len(m.sections) > 0 {
+		titleText = m.sections[0].Title
+		contentText = m.sections[0].Content
+	} else {
+		contentText = m.rawContent
+	}
+
+	title, err1 := m.mdRenderer.Render(titleText)
 	if err1 != nil {
-		title = m.title + "\n\n"
+		title = titleText + "\n\n"
 	}
 
 	var body string
@@ -247,14 +299,19 @@ func (m NoteView) renderNote() string {
 
 	switch m.viewState {
 	case StateContent:
-		body, err2 = m.mdRenderer.Render(m.content)
+		body, err2 = m.mdRenderer.Render(contentText)
 	case StateHints:
-		if len(m.hints) == 0 {
+		var currentHints []string
+		if len(m.sections) > 0 {
+			currentHints = m.sections[0].Hints
+		}
+
+		if len(currentHints) == 0 {
 			body = "No hints available."
 		} else {
 			// Format hints as a list
 			hintsList := ""
-			for _, h := range m.hints {
+			for _, h := range currentHints {
 				hintsList += "- " + h + "\n"
 			}
 			body, err2 = m.mdRenderer.Render(hintsList)
