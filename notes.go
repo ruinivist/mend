@@ -56,7 +56,8 @@ type NoteView struct {
 
 // ================== messages ===================
 type loadNote struct {
-	path string
+	path  string
+	force bool
 }
 
 type loadedNote struct {
@@ -157,7 +158,7 @@ func (m *NoteView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cmd
 
 	case loadNote:
-		if m.path == msg.path {
+		if m.path == msg.path && !msg.force {
 			return m, nil //noop
 		}
 		m.path = msg.path
