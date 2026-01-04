@@ -100,11 +100,11 @@ func (t *FsTree) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		t.errMsg = ""
 		switch m.String() {
-		case "up", "k":
+		case "up", "w":
 			_ = t.MoveUp()
-		case "down", "j":
+		case "down", "s":
 			_ = t.MoveDown()
-		case "enter", " ":
+		case "e":
 			_ = t.ToggleSelectedExpand()
 		case "n": // new file
 			return t, func() tea.Msg { return RequestInputMsg{Action: ActionNewFile} }
@@ -112,7 +112,7 @@ func (t *FsTree) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return t, func() tea.Msg { return RequestInputMsg{Action: ActionNewFolder} }
 		case "C": // new root node
 			return t, func() tea.Msg { return RequestInputMsg{Action: ActionNewRoot} }
-		case "d", "delete": // delete node
+		case "delete": // delete node
 			err := t.DeleteNode(t.selectedNode)
 			if err != nil {
 				t.errMsg = err.Error()
