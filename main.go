@@ -32,15 +32,17 @@ this data in msg when returned to the update func is used to update the model
 */
 
 type model struct {
-	width          int
-	terminalWidth  int
-	terminalHeight int
-	fsTreeWidth    int
-	noteViewWidth  int
-	tree           *FsTree
-	rootPath       string // path to load the tree from
-	loading        bool
-	noteView       *NoteView
+	width             int
+	terminalWidth     int
+	terminalHeight    int
+	fsTreeWidth       int
+	noteViewWidth     int
+	tree              *FsTree
+	rootPath          string // path to load the tree from
+	loading           bool
+	noteView          *NoteView
+	isDragging        bool
+	isHoveringDivider bool
 }
 
 func NewModel(rootPath string) *model {
@@ -78,8 +80,8 @@ func (m *model) loadTreeCmd(path string) tea.Cmd {
 func (m *model) layout(width, height int) {
 	m.terminalWidth = width
 	m.terminalHeight = height
-	m.fsTreeWidth = width / 4
-	m.noteViewWidth = width - m.fsTreeWidth
+	
+	m.fsTreeWidth, m.noteViewWidth = calculateLayout(width, m.fsTreeWidth)
 }
 
 func (m *model) Init() tea.Cmd {
@@ -132,17 +134,60 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "q", "ctrl+c":
 			return m, tea.Quit
 		}
+		
+		var cmds []tea.Cmd
+
 		// Forward keyboard input to tree
-		var cmd tea.Cmd
 		if m.tree != nil {
-			_, cmd = m.tree.Update(msg)
+			_, cmd := m.tree.Update(msg)
+			cmds = append(cmds, cmd)
 		}
-		return m, cmd
+
+		// Forward keyboard input to noteView
+		_, cmd := m.noteView.Update(msg)
+		cmds = append(cmds, cmd)
+
+		return m, tea.Batch(cmds...)
 
 	case tea.MouseMsg:
-		// Forward mouse input to tree
+		if msg.Action == tea.MouseActionRelease {
+			m.isDragging = false
+		}
+
+		if msg.Action == tea.MouseActionMotion {
+			m.isHoveringDivider = isHoveringDivider(msg.X, m.fsTreeWidth)
+
+			if m.isDragging {
+				m.fsTreeWidth, m.noteViewWidth = calculateLayout(m.terminalWidth, msg.X)
+
+				// Update children with new sizes
+				var cmds []tea.Cmd
+				if m.tree != nil {
+					_, cmd := m.tree.Update(tea.WindowSizeMsg{
+						Width:  m.fsTreeWidth,
+						Height: m.terminalHeight,
+					})
+					cmds = append(cmds, cmd)
+				}
+				_, cmd := m.noteView.Update(tea.WindowSizeMsg{
+					Width:  m.noteViewWidth,
+					Height: m.terminalHeight,
+				})
+				cmds = append(cmds, cmd)
+				return m, tea.Batch(cmds...)
+			}
+		}
+
+		if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
+			if isHoveringDivider(msg.X, m.fsTreeWidth) {
+				m.isDragging = true
+				return m, nil
+			}
+		}
+
+		// Forward mouse input to tree only if not dragging
 		var cmd tea.Cmd
-		if m.tree != nil {
+		if m.tree != nil && !m.isDragging {
 			_, cmd = m.tree.Update(msg)
 		}
 		return m, cmd
@@ -158,20 +203,37 @@ func (m model) View() string {
 
 	tree := m.tree.View()
 	tree = lipgloss.NewStyle().
-		Border(lipgloss.NormalBorder()).
 		Height(m.terminalHeight).
-		Width(40).
+		Width(m.fsTreeWidth).
 		Align(lipgloss.Left).
-		PaddingRight(2).
-		BorderLeft(false).
-		BorderTop(false).
-		BorderBottom(false).
+		PaddingRight(1).
 		Render(tree)
+
+	var dividerChar string
+	if m.isDragging || m.isHoveringDivider {
+		dividerChar = "█"
+	} else {
+		dividerChar = "│"
+	}
+
+	// Repeat the character vertically to fill height
+	dividerLines := make([]string, m.terminalHeight)
+	for i := range dividerLines {
+		dividerLines[i] = dividerChar
+	}
+	divider := lipgloss.JoinVertical(lipgloss.Left, dividerLines...)
+
+	// Ensure divider has the correct height style applied (though JoinVertical does most of it)
+	divider = lipgloss.NewStyle().
+		Height(m.terminalHeight).
+		Render(divider)
+
 	notes := m.noteView.View()
 
 	full := lipgloss.JoinHorizontal(
 		lipgloss.Top,
 		tree,
+		divider,
 		notes,
 	)
 	return full
