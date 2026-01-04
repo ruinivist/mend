@@ -155,7 +155,7 @@ func (t *FsTree) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	t.viewStart, t.viewEnd = t.getViewportBounds()
 
-	if t.oldSelected != t.selectedNode {
+	if t.oldSelected != t.selectedNode && t.selectedNode.nodeType == FileNode {
 		t.oldSelected = t.selectedNode
 		return t, func() tea.Msg {
 			return nodeSelected{path: t.selectedNode.path}
