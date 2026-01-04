@@ -177,6 +177,9 @@ func (t *FsTree) PerformAction(action FsActionType, name string) error {
 }
 
 func (t *FsTree) getViewportBounds() (startLine, endLine int) {
+	if t.selectedNode == nil {
+		return 0, 0 // doesn't amtter in this case
+	}
 	selectedLine := t.selectedNode.line
 	halfHeight := t.height / 2
 

@@ -310,6 +310,9 @@ func extractHints(content string) []string {
 }
 
 func (m NoteView) renderNote() string {
+	if m.path == "" {
+		return "" // no note is loaded, don't need to bother with anything
+	}
 	var titleText, contentText string
 	if len(m.sections) > 0 {
 		titleText = m.sections[m.currentSectionIndex].Title
@@ -330,8 +333,10 @@ func (m NoteView) renderNote() string {
 	case StateContent:
 		body, err2 = m.mdRenderer.Render(contentText)
 	case StateHints:
-		var currentHints []string
-		currentHints = m.sections[m.currentSectionIndex].Hints
+		currentHints := []string{}
+		if m.currentSectionIndex < len(m.sections) {
+			currentHints = m.sections[m.currentSectionIndex].Hints
+		}
 
 		if len(currentHints) == 0 {
 			body = "No hints available."
