@@ -71,6 +71,9 @@ func NewNoteView() *NoteView {
 	)
 	ta := textarea.New()
 	ta.Focus()
+	ta.Prompt = ""
+	ta.ShowLineNumbers = false
+
 	return &NoteView{
 		loading:    false,
 		mdRenderer: mdRenderer,
@@ -100,10 +103,8 @@ func (m *NoteView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		if m.isEditing {
 			switch msg.String() {
-			case "ctrl+w":
+			case "esc", "ctrl+q":
 				m.isEditing = false
-				return m, nil
-			case "ctrl+s":
 				return m, saveContent(m.path, m.textarea.Value())
 			}
 			var cmd tea.Cmd
