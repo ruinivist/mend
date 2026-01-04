@@ -7,6 +7,7 @@ repetition in mend
 package main
 
 import (
+	"fmt"
 	"os"
 	"regexp"
 	"strings"
@@ -15,6 +16,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/glamour"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/text"
@@ -36,9 +38,10 @@ const (
 
 type NoteView struct {
 	// the actual content
-	path       string
-	rawContent string   // full content for editing
-	sections   []Section
+	path                string
+	rawContent          string // full content for editing
+	sections            []Section
+	currentSectionIndex int
 	// display layer
 	err        error
 	loading    bool
@@ -89,7 +92,7 @@ func (m *NoteView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.vp.Width = msg.Width
-		m.vp.Height = msg.Height
+		m.vp.Height = msg.Height - 1
 		m.textarea.SetWidth(msg.Width)
 		m.textarea.SetHeight(msg.Height)
 		return m, nil
@@ -132,6 +135,20 @@ func (m *NoteView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "pgdown":
 			m.vp.PageDown()
 			return m, nil
+		case "left", "a":
+			if m.currentSectionIndex > 0 {
+				m.currentSectionIndex--
+				m.vp.SetContent(m.renderNote())
+				m.vp.GotoTop()
+			}
+			return m, nil
+		case "right", "d":
+			if m.currentSectionIndex < len(m.sections)-1 {
+				m.currentSectionIndex++
+				m.vp.SetContent(m.renderNote())
+				m.vp.GotoTop()
+			}
+			return m, nil
 		}
 		var cmd tea.Cmd
 		m.vp, cmd = m.vp.Update(msg)
@@ -144,6 +161,7 @@ func (m *NoteView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.path = msg.path
 		m.isEditing = false
 		m.loading = true
+		m.currentSectionIndex = 0
 		return m, fetchContent(msg.path)
 
 	case loadedNote:
@@ -151,6 +169,7 @@ func (m *NoteView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.rawContent = msg.rawContent
 		m.sections = msg.sections
 		m.err = msg.err
+		m.currentSectionIndex = 0
 		m.viewState = StateTitleOnly
 		m.vp.SetContent(m.renderNote())
 
@@ -171,6 +190,9 @@ func (m NoteView) View() string {
 	if m.loading {
 		return "loading..."
 	}
+	if m.path == "" {
+		return ""
+	}
 
 	if m.err != nil {
 		return "Error: " + m.err.Error()
@@ -180,7 +202,17 @@ func (m NoteView) View() string {
 		return m.textarea.View()
 	}
 
-	return m.vp.View()
+	page := m.currentSectionIndex + 1
+	total := len(m.sections)
+	var footer string
+	if total == 0 {
+		footer = "No sections"
+	} else {
+		footer = fmt.Sprintf("%d/%d", page, total)
+	}
+	footer = lipgloss.NewStyle().Width(m.vp.Width).Align(lipgloss.Right).Render(footer)
+
+	return m.vp.View() + "\n" + footer
 }
 
 func fetchContent(path string) tea.Cmd {
@@ -283,8 +315,8 @@ func extractHints(content string) []string {
 func (m NoteView) renderNote() string {
 	var titleText, contentText string
 	if len(m.sections) > 0 {
-		titleText = m.sections[0].Title
-		contentText = m.sections[0].Content
+		titleText = m.sections[m.currentSectionIndex].Title
+		contentText = m.sections[m.currentSectionIndex].Content
 	} else {
 		contentText = m.rawContent
 	}
@@ -302,9 +334,7 @@ func (m NoteView) renderNote() string {
 		body, err2 = m.mdRenderer.Render(contentText)
 	case StateHints:
 		var currentHints []string
-		if len(m.sections) > 0 {
-			currentHints = m.sections[0].Hints
-		}
+		currentHints = m.sections[m.currentSectionIndex].Hints
 
 		if len(currentHints) == 0 {
 			body = "No hints available."
