@@ -1,16 +1,16 @@
 /*
 This file contains the implementation of an in-memory tree of files and folders that the app used.
 It is initialised at startup and used for state changes in UI and later persisted to disk.
-
-- ruinivist, 30Dec25
 */
 
-package main
+package fstree
 
 import (
 	"errors"
+	"mend/internal/filesystem"
 	"mend/styles"
 	"mend/utils"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -30,28 +30,28 @@ const (
 // a single node, Fs => deals with file system related info mostly
 // a name for example can be content derived as well
 type FsNode struct {
-	nodeType FsNodeType
-	path     string
-	children []*FsNode
-	parent   *FsNode // for fast traversal up the tree
-	expanded bool    // makes sense only for folder nodes
-	// these are populated by buildLines for fast access
+	Type     FsNodeType
+	Path     string
+	Children []*FsNode
+	Parent   *FsNode // for fast traversal up the tree
+	Expanded bool    // makes sense only for folder nodes
+	// these are populated by BuildLines for fast access
 	line int
 	prev *FsNode
 	next *FsNode
 }
 
 func (n *FsNode) FileName() string {
-	name := filepath.Base(n.path)
-	if n.nodeType == FileNode {
+	name := filepath.Base(n.Path)
+	if n.Type == FileNode {
 		return strings.TrimSuffix(name, ".md")
 	}
 	return name
 }
 
 // ================== messages ===================
-type nodeSelected struct {
-	path string
+type NodeSelectedMsg struct {
+	Path string
 }
 
 type FsActionType int
@@ -73,11 +73,11 @@ type PerformActionMsg struct {
 
 // ==================== FsNode definition ====================
 type FsTree struct {
-	root         *FsNode
+	Root         *FsNode
 	lines        map[int]*FsNode // flattened view of nodes for easy line access, map so that I can handle blank padding
-	selectedNode *FsNode
+	SelectedNode *FsNode
 	hoveredNode  *FsNode
-	errMsg       string
+	ErrMsg       string
 	height       int
 	width        int
 	viewStart    int
@@ -97,13 +97,13 @@ func (t *FsTree) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case PerformActionMsg:
 		err := t.PerformAction(m.Action, m.Name)
 		if err != nil {
-			t.errMsg = err.Error()
+			t.ErrMsg = err.Error()
 		}
 	case tea.WindowSizeMsg:
 		t.width = m.Width
 		t.height = m.Height
 	case tea.KeyMsg:
-		t.errMsg = ""
+		t.ErrMsg = ""
 		switch m.String() {
 		case "w", "up":
 			_ = t.MoveUp()
@@ -118,9 +118,9 @@ func (t *FsTree) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "C": // new root node
 			return t, func() tea.Msg { return RequestInputMsg{Action: ActionNewRoot} }
 		case "delete": // delete node
-			err := t.DeleteNode(t.selectedNode)
+			err := t.DeleteNode(t.SelectedNode)
 			if err != nil {
-				t.errMsg = err.Error()
+				t.ErrMsg = err.Error()
 			}
 		}
 
@@ -138,15 +138,15 @@ func (t *FsTree) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.X >= t.width {
 			break
 		}
-		t.errMsg = ""
+		t.ErrMsg = ""
 		t.hoveredNode = t.lines[m.Y] // hover
 
 		// click
 		if m.Button == tea.MouseButtonLeft && m.Action == tea.MouseActionPress {
 			nodeAtLine := t.lines[m.Y]
 			if nodeAtLine != nil {
-				t.selectedNode = nodeAtLine
-				if nodeAtLine.nodeType == FolderNode {
+				t.SelectedNode = nodeAtLine
+				if nodeAtLine.Type == FolderNode {
 					_ = t.ToggleExpand(nodeAtLine)
 				}
 			}
@@ -155,10 +155,10 @@ func (t *FsTree) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	t.viewStart, t.viewEnd = t.getViewportBounds()
 
-	if t.oldSelected != t.selectedNode && t.selectedNode.nodeType == FileNode {
-		t.oldSelected = t.selectedNode
+	if t.oldSelected != t.SelectedNode && t.SelectedNode.Type == FileNode {
+		t.oldSelected = t.SelectedNode
 		return t, func() tea.Msg {
-			return nodeSelected{path: t.selectedNode.path}
+			return NodeSelectedMsg{Path: t.SelectedNode.Path}
 		}
 	}
 	return t, nil
@@ -167,20 +167,20 @@ func (t *FsTree) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (t *FsTree) PerformAction(action FsActionType, name string) error {
 	switch action {
 	case ActionNewFile:
-		return t.CreateNode(t.selectedNode, name, FileNode)
+		return t.CreateNode(t.SelectedNode, name, FileNode)
 	case ActionNewFolder:
-		return t.CreateNode(t.selectedNode, name, FolderNode)
+		return t.CreateNode(t.SelectedNode, name, FolderNode)
 	case ActionNewRoot:
-		return t.CreateNode(t.root, name, FolderNode)
+		return t.CreateNode(t.Root, name, FolderNode)
 	}
 	return nil
 }
 
 func (t *FsTree) getViewportBounds() (startLine, endLine int) {
-	if t.selectedNode == nil {
+	if t.SelectedNode == nil {
 		return 0, 0 // doesn't amtter in this case
 	}
-	selectedLine := t.selectedNode.line
+	selectedLine := t.SelectedNode.line
 	halfHeight := t.height / 2
 
 	startLine = max(0, selectedLine-halfHeight)
@@ -198,16 +198,16 @@ func (t *FsTree) getViewportBounds() (startLine, endLine int) {
 }
 
 func (t *FsTree) View() string {
-	if t.errMsg != "" {
-		return t.errMsg
+	if t.ErrMsg != "" {
+		return t.ErrMsg
 	}
 
-	if len(t.root.children) == 0 {
+	if len(t.Root.Children) == 0 {
 		return "no files/folders\nPress C to create"
 	}
 
 	builder := &strings.Builder{}
-	t.renderNode(t.root, 0, builder)
+	t.renderNode(t.Root, 0, builder)
 	rendered := builder.String()
 
 	lines := strings.Split(rendered, "\n")
@@ -226,21 +226,21 @@ func (t *FsTree) View() string {
 
 func NewFsTree(rootPath string, startOffset int) *FsTree {
 	root := &FsNode{
-		nodeType: FolderNode,
-		path:     rootPath,
-		children: make([]*FsNode, 0),
-		expanded: true,
+		Type:     FolderNode,
+		Path:     rootPath,
+		Children: make([]*FsNode, 0),
+		Expanded: true,
 	}
-	walkFileSystemAndBuildTree(rootPath, root)
+	WalkFileSystemAndBuildTree(rootPath, root)
 
 	tree := &FsTree{
-		root:        root,
+		Root:        root,
 		startOffset: startOffset,
 	}
-	if len(root.children) > 0 {
-		tree.selectedNode = root.children[0]
+	if len(root.Children) > 0 {
+		tree.SelectedNode = root.Children[0]
 	}
-	tree.buildLines()
+	tree.BuildLines()
 	return tree
 }
 
@@ -248,27 +248,27 @@ func (t *FsTree) DeleteNode(node *FsNode) error {
 	if node == nil {
 		return errors.New("node to delete cannot be nil")
 	}
-	parent := node.parent
+	parent := node.Parent
 	if parent == nil {
 		return errors.New("node to delete must have a parent")
 	}
 
 	// materialise
-	if err := deletePath(node.path); err != nil {
+	if err := filesystem.DeletePath(node.Path); err != nil {
 		return err
 	}
 
-	t.selectedNode = node.prev // cannot be next as subfolder/file deletion
-	parent.children = utils.RemoveFromSlice(parent.children, node)
+	t.SelectedNode = node.prev // cannot be next as subfolder/file deletion
+	parent.Children = utils.RemoveFromSlice(parent.Children, node)
 
-	if t.selectedNode == nil {
+	if t.SelectedNode == nil {
 		// can only happen if first root level node is deleted
-		if len(t.root.children) > 0 {
-			t.selectedNode = t.root.children[0]
+		if len(t.Root.Children) > 0 {
+			t.SelectedNode = t.Root.Children[0]
 		}
 	}
 
-	t.buildLines()
+	t.BuildLines()
 	return nil
 }
 
@@ -276,17 +276,17 @@ func (t *FsTree) ToggleExpand(node *FsNode) error {
 	if node == nil {
 		return errors.New("node cannot be nil")
 	}
-	if node.nodeType != FolderNode {
+	if node.Type != FolderNode {
 		return errors.New("only folder nodes can be expanded or collapsed")
 	}
 
-	node.expanded = !node.expanded
-	t.buildLines()
+	node.Expanded = !node.Expanded
+	t.BuildLines()
 	return nil
 }
 
 func (t *FsTree) move(delta int) error {
-	selected := t.selectedNode
+	selected := t.SelectedNode
 	if selected == nil {
 		return errors.New("no node is currently selected")
 	}
@@ -301,7 +301,7 @@ func (t *FsTree) move(delta int) error {
 		next = selected.prev
 	}
 	if next != nil {
-		t.selectedNode = next
+		t.SelectedNode = next
 	}
 	return nil
 }
@@ -310,14 +310,14 @@ func (t *FsTree) MoveUp() error   { return t.move(-1) }
 func (t *FsTree) MoveDown() error { return t.move(1) }
 
 func (t *FsTree) ToggleSelectedExpand() error {
-	if t.selectedNode == nil {
+	if t.SelectedNode == nil {
 		return errors.New("no node is currently selected")
 	}
-	if t.selectedNode.nodeType != FolderNode {
+	if t.SelectedNode.Type != FolderNode {
 		return errors.New("only folder nodes can be expanded or collapsed")
 	}
 
-	t.ToggleExpand(t.selectedNode)
+	t.ToggleExpand(t.SelectedNode)
 	return nil
 }
 
@@ -327,7 +327,7 @@ func (t *FsTree) renderNode(node *FsNode, depth int, builder *strings.Builder) {
 	}
 
 	folderInRoot := false
-	if node.nodeType == FolderNode && depth == 1 && node.prev != nil {
+	if node.Type == FolderNode && depth == 1 && node.prev != nil {
 		folderInRoot = true
 	}
 
@@ -335,9 +335,9 @@ func (t *FsTree) renderNode(node *FsNode, depth int, builder *strings.Builder) {
 	prevIndent := strings.Repeat(" ", max(depth-1, 0))
 
 	var icon string
-	switch node.nodeType {
+	switch node.Type {
 	case FolderNode:
-		if node.expanded {
+		if node.Expanded {
 			icon = indent + styles.ArrowDownIcon
 		} else {
 			icon = indent + styles.ArrowRightIcon
@@ -350,7 +350,7 @@ func (t *FsTree) renderNode(node *FsNode, depth int, builder *strings.Builder) {
 	// highlight if selected or hovered
 	// note: the logic of lines cache needs to match render
 	fileName := node.FileName()
-	isSelected := node == t.selectedNode
+	isSelected := node == t.SelectedNode
 	isHovered := node == t.hoveredNode
 
 	if isSelected {
@@ -368,19 +368,19 @@ func (t *FsTree) renderNode(node *FsNode, depth int, builder *strings.Builder) {
 		builder.WriteString(line)
 	}
 
-	if node.expanded {
-		for _, child := range node.children {
+	if node.Expanded {
+		for _, child := range node.Children {
 			t.renderNode(child, depth+1, builder)
 		}
 	}
 }
 
 // builds a cache of line num to rendered node in view
-func (t *FsTree) buildLines() {
+func (t *FsTree) BuildLines() {
 	t.lines = make(map[int]*FsNode)
 	line := -1
 	flatTree := make([]*FsNode, 0)
-	t.buildLinesRec(t.root, 0, &line, &flatTree) // root has -1 depth and -1 index, as it's not meant to be rendered
+	t.buildLinesRec(t.Root, 0, &line, &flatTree) // root has -1 depth and -1 index, as it's not meant to be rendered
 	// everything is a child of root
 	flatTree[0] = nil // basically a merge of skip root and padding ends with nil
 	flatTree = append(flatTree, nil)
@@ -398,7 +398,7 @@ func (t *FsTree) buildLinesRec(node *FsNode, depth int, currentLine *int, flatTr
 		return
 	}
 
-	if node.nodeType == FolderNode && depth == 1 && *currentLine != 0 {
+	if node.Type == FolderNode && depth == 1 && *currentLine != 0 {
 		(*currentLine)++
 	}
 	t.lines[*currentLine] = node
@@ -406,8 +406,8 @@ func (t *FsTree) buildLinesRec(node *FsNode, depth int, currentLine *int, flatTr
 	*flatTree = append(*flatTree, node)
 	(*currentLine)++
 
-	if node.expanded {
-		for _, child := range node.children {
+	if node.Expanded {
+		for _, child := range node.Children {
 			t.buildLinesRec(child, depth+1, currentLine, flatTree)
 		}
 	}
@@ -418,14 +418,14 @@ func (t *FsTree) CreateNode(folder *FsNode, name string, nodeType FsNodeType) er
 		return errors.New("folder node cannot be nil")
 	}
 
-	if folder.nodeType == FileNode {
-		folder = folder.parent
+	if folder.Type == FileNode {
+		folder = folder.Parent
 	}
 
-	if folder.nodeType != FolderNode {
+	if folder.Type != FolderNode {
 		return errors.New("parent node must be a folder. this should not be allowed by ui")
-	} else if folder.nodeType == FolderNode && !folder.expanded {
-		folder.expanded = true
+	} else if folder.Type == FolderNode && !folder.Expanded {
+		folder.Expanded = true
 	}
 
 	if name == "" {
@@ -436,16 +436,16 @@ func (t *FsTree) CreateNode(folder *FsNode, name string, nodeType FsNodeType) er
 		name += ".md"
 	}
 
-	path := filepath.Join(folder.path, name)
+	path := filepath.Join(folder.Path, name)
 	// materialise it first
 	switch nodeType {
 	case FileNode:
-		err := createFile(path, []byte{})
+		err := filesystem.CreateFile(path, []byte{})
 		if err != nil {
 			return err
 		}
 	case FolderNode:
-		err := createFolder(path)
+		err := filesystem.CreateFolder(path)
 		if err != nil {
 			return err
 		}
@@ -456,19 +456,74 @@ func (t *FsTree) CreateNode(folder *FsNode, name string, nodeType FsNodeType) er
 		expanded = true
 	}
 	newNode := &FsNode{
-		nodeType: nodeType,
-		path:     path,
-		children: make([]*FsNode, 0),
-		parent:   folder,
-		expanded: expanded,
+		Type:     nodeType,
+		Path:     path,
+		Children: make([]*FsNode, 0),
+		Parent:   folder,
+		Expanded: expanded,
 	}
 	// files are first of children, folder last of children
 	if nodeType == FileNode {
-		folder.children = append([]*FsNode{newNode}, folder.children...)
+		folder.Children = append([]*FsNode{newNode}, folder.Children...)
 	} else {
-		folder.children = append(folder.children, newNode)
+		folder.Children = append(folder.Children, newNode)
 	}
-	t.selectedNode = newNode
-	t.buildLines()
+	t.SelectedNode = newNode
+	t.BuildLines()
+	return nil
+}
+
+func WalkFileSystemAndBuildTree(rootPath string, node *FsNode) error {
+	if node == nil {
+		return errors.New("node cannot be nil")
+	}
+	if len(node.Children) > 0 {
+		return errors.New("node already has children")
+	}
+
+	entries, err := os.ReadDir(rootPath)
+	if err != nil {
+		return err
+	}
+
+	files := make([]os.DirEntry, 0)
+	folders := make([]os.DirEntry, 0)
+
+	for _, entry := range entries {
+		// dot folders and files skipped
+		if len(entry.Name()) > 0 && entry.Name()[0] == '.' {
+			continue
+		}
+
+		if entry.IsDir() {
+			folders = append(folders, entry)
+		} else {
+			files = append(files, entry)
+		}
+	}
+
+	for _, file := range files {
+		newNode := &FsNode{
+			Type:     FileNode,
+			Path:     filepath.Join(rootPath, file.Name()),
+			Children: make([]*FsNode, 0),
+			Parent:   node,
+			Expanded: false,
+		}
+		node.Children = append(node.Children, newNode)
+	}
+
+	for _, folder := range folders {
+		newNode := &FsNode{
+			Type:     FolderNode,
+			Path:     filepath.Join(rootPath, folder.Name()),
+			Children: make([]*FsNode, 0),
+			Parent:   node,
+			Expanded: true, // all expanded by default
+		}
+		node.Children = append(node.Children, newNode)
+		WalkFileSystemAndBuildTree(newNode.Path, newNode)
+	}
+
 	return nil
 }

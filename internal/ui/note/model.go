@@ -1,10 +1,9 @@
 /*
 this pakckage basically handles notes which are the individual files for spaced
 repetition in mend
-- ruinivist, 3Jan26
 */
 
-package main
+package note
 
 import (
 	"fmt"
@@ -39,7 +38,7 @@ const (
 
 type NoteView struct {
 	// the actual content
-	path                string
+	Path                string
 	rawContent          string // full content for editing
 	sections            []Section
 	currentSectionIndex int
@@ -55,15 +54,15 @@ type NoteView struct {
 }
 
 // ================== messages ===================
-type loadNote struct {
-	path  string
-	force bool
+type LoadNoteMsg struct {
+	Path  string
+	Force bool
 }
 
-type loadedNote struct {
-	rawContent string
-	sections   []Section
-	err        error
+type LoadedNote struct {
+	RawContent string
+	Sections   []Section
+	Err        error
 }
 
 func NewNoteView() *NoteView {
@@ -107,7 +106,7 @@ func (m *NoteView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			switch msg.String() {
 			case "esc", "ctrl+q":
 				m.isEditing = false
-				return m, saveContent(m.path, m.textarea.Value())
+				return m, saveContent(m.Path, m.textarea.Value())
 			}
 			var cmd tea.Cmd
 			m.textarea, cmd = m.textarea.Update(msg)
@@ -116,7 +115,7 @@ func (m *NoteView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		switch msg.String() {
 		case "enter":
-			if m.path != "" && !m.loading {
+			if m.Path != "" && !m.loading {
 				m.isEditing = true
 				m.textarea.SetValue(m.rawContent)
 				m.textarea.Focus()
@@ -157,21 +156,21 @@ func (m *NoteView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.vp, cmd = m.vp.Update(msg)
 		return m, cmd
 
-	case loadNote:
-		if m.path == msg.path && !msg.force {
+	case LoadNoteMsg:
+		if m.Path == msg.Path && !msg.Force {
 			return m, nil //noop
 		}
-		m.path = msg.path
+		m.Path = msg.Path
 		m.isEditing = false
 		m.loading = true
 		m.currentSectionIndex = 0
-		return m, fetchContent(msg.path)
+		return m, fetchContent(msg.Path)
 
-	case loadedNote:
+	case LoadedNote:
 		m.loading = false
-		m.rawContent = msg.rawContent
-		m.sections = msg.sections
-		m.err = msg.err
+		m.rawContent = msg.RawContent
+		m.sections = msg.Sections
+		m.err = msg.Err
 		m.currentSectionIndex = 0
 		m.viewState = StateTitleOnly
 		m.vp.SetContent(m.renderNote())
@@ -193,7 +192,7 @@ func (m NoteView) View() string {
 	if m.loading {
 		return "loading..."
 	}
-	if m.path == "" {
+	if m.Path == "" {
 		return ""
 	}
 
@@ -222,20 +221,20 @@ func fetchContent(path string) tea.Cmd {
 	return func() tea.Msg {
 		data, err := os.ReadFile(path)
 		if err != nil {
-			return loadedNote{err: err}
+			return LoadedNote{Err: err}
 		}
 
 		rawContent := string(data)
-		sections := parseSections(data)
+		sections := ParseSections(data)
 
-		return loadedNote{
-			rawContent: rawContent,
-			sections:   sections,
+		return LoadedNote{
+			RawContent: rawContent,
+			Sections:   sections,
 		}
 	}
 }
 
-func parseSections(source []byte) []Section {
+func ParseSections(source []byte) []Section {
 	md := goldmark.New()
 	reader := text.NewReader(source)
 	doc := md.Parser().Parse(reader)
@@ -259,7 +258,7 @@ func parseSections(source []byte) []Section {
 				// you have a heading and a content to accumulte over
 				contentsRaw := source[lastPos:contentEnd]
 				contents := strings.TrimSpace(string(contentsRaw))
-				hints := extractHints(contents)
+				hints := ExtractHints(contents)
 				sections = append(sections, Section{
 					Title:   title,
 					Content: contents,
@@ -276,7 +275,7 @@ func parseSections(source []byte) []Section {
 	if lastPos < len(source) {
 		contentsRaw := source[lastPos:]
 		contents := strings.TrimSpace(string(contentsRaw))
-		hints := extractHints(contents)
+		hints := ExtractHints(contents)
 		sections = append(sections, Section{
 			Title:   title,
 			Content: contents,
@@ -291,13 +290,13 @@ func saveContent(path, content string) tea.Cmd {
 	return func() tea.Msg {
 		err := os.WriteFile(path, []byte(content), 0644)
 		if err != nil {
-			return loadedNote{err: err}
+			return LoadedNote{Err: err}
 		}
 		return fetchContent(path)()
 	}
 }
 
-func extractHints(content string) []string {
+func ExtractHints(content string) []string {
 	re := regexp.MustCompile(`(?s)\*\*(.*?)\*\*|__(.*?)__`)
 	matches := re.FindAllStringSubmatch(content, -1)
 	hints := make([]string, 0)
@@ -312,7 +311,7 @@ func extractHints(content string) []string {
 }
 
 func (m NoteView) renderNote() string {
-	if m.path == "" {
+	if m.Path == "" {
 		return "" // no note is loaded, don't need to bother with anything
 	}
 	var titleText, contentText string

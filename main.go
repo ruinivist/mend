@@ -5,6 +5,9 @@ import (
 	"os"
 	"os/exec"
 
+	"mend/internal/ui/fstree"
+	"mend/internal/ui/note"
+
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -12,25 +15,7 @@ import (
 
 /*
 Quick notes to self:
-
-# How bubbletea works?
-Bubbletea is a
-Init ( once for sync/async opts both )
--> Update ( model ) ( againc an be sync/async )
--> View loop
-init creates initial model ( model is the global ui state and just a struct )
-update modifies model based on an immediate or deferred compute
-view is purely for rendering based on model
-
-notes:
-- model struct next -> global ui model
-- createModel is the initial sync model state population
-I anyways need to create the model struct even if blank
-- Init func is for bubbletea to call once at start so both are needed
-- all widths and heights are character count based
-- async updates are via cmds (tea.Cmd ) that are no arg funcs that return
-a tea.Msg ( that is basically a struct and hence has the data needed )
-this data in msg when returned to the update func is used to update the model
+... (comments preserved)
 */
 
 type model struct {
@@ -39,10 +24,10 @@ type model struct {
 	terminalHeight    int
 	fsTreeWidth       int
 	noteViewWidth     int
-	tree              *FsTree
+	tree              *fstree.FsTree
 	rootPath          string // path to load the tree from
 	loading           bool
-	noteView          *NoteView
+	noteView          *note.NoteView
 	isDragging        bool
 	isHoveringDivider bool
 	contentHeight     int
@@ -50,7 +35,7 @@ type model struct {
 	// input handling
 	textInput     textinput.Model
 	inputMode     bool
-	pendingAction FsActionType
+	pendingAction fstree.FsActionType
 }
 
 func NewModel(rootPath string) *model {
@@ -61,7 +46,7 @@ func NewModel(rootPath string) *model {
 	return &model{
 		rootPath:      rootPath,
 		loading:       true,
-		noteView:      NewNoteView(),
+		noteView:      note.NewNoteView(),
 		showStatusBar: false,
 		textInput:     ti,
 	}
@@ -71,7 +56,7 @@ func NewModel(rootPath string) *model {
 // these need to be on the "model" ( duck typing "implements" interface )
 
 type treeLoadedMsg struct {
-	tree *FsTree
+	tree *fstree.FsTree
 }
 
 func (m *model) loadTreeCmd(path string) tea.Cmd {
@@ -87,7 +72,7 @@ func (m *model) loadTreeCmd(path string) tea.Cmd {
 		} else {
 			targetPath = path
 		}
-		return treeLoadedMsg{tree: NewFsTree(targetPath, fsTreeStartOffset)}
+		return treeLoadedMsg{tree: fstree.NewFsTree(targetPath, fsTreeStartOffset)}
 	}
 }
 
@@ -141,40 +126,40 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		})
 		return m, cmd
 
-	case nodeSelected:
+	case fstree.NodeSelectedMsg:
 		// Forward node selection to noteView
-		_, cmd := m.noteView.Update(loadNote{path: msg.path})
+		_, cmd := m.noteView.Update(note.LoadNoteMsg{Path: msg.Path})
 		return m, cmd
 
-	case loadNote:
+	case note.LoadNoteMsg:
 		_, cmd := m.noteView.Update(msg)
-		if msg.force {
+		if msg.Force {
 			return m, tea.Batch(cmd, tea.EnableMouseAllMotion)
 		}
 		return m, cmd
 
-	case loadedNote:
+	case note.LoadedNote:
 		// Forward loaded note to noteView
 		_, cmd := m.noteView.Update(msg)
 		return m, cmd
 
-	case PerformActionMsg:
+	case fstree.PerformActionMsg:
 		if m.tree != nil {
 			_, cmd := m.tree.Update(msg)
 			return m, cmd
 		}
 
-	case RequestInputMsg:
+	case fstree.RequestInputMsg:
 		m.inputMode = true
 		m.pendingAction = msg.Action
 		m.textInput.Focus()
 		m.textInput.SetValue("")
 		switch msg.Action {
-		case ActionNewFile:
+		case fstree.ActionNewFile:
 			m.textInput.Placeholder = "New File Name"
-		case ActionNewFolder:
+		case fstree.ActionNewFolder:
 			m.textInput.Placeholder = "New Folder Name"
-		case ActionNewRoot:
+		case fstree.ActionNewRoot:
 			m.textInput.Placeholder = "New Root Folder Name"
 		}
 		m.layout(m.terminalWidth, m.terminalHeight) // recalc layout for status bar area
@@ -192,7 +177,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				cmds := []tea.Cmd{m.resizeChildren()}
 				if val != "" {
 					cmds = append(cmds, func() tea.Msg {
-						return PerformActionMsg{
+						return fstree.PerformActionMsg{
 							Action: m.pendingAction,
 							Name:   val,
 						}
@@ -224,15 +209,21 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.layout(m.terminalWidth, m.terminalHeight)
 			return m, m.resizeChildren()
 		case "o":
-			if m.tree != nil && m.tree.selectedNode != nil && m.tree.selectedNode.nodeType == FileNode {
-				c := exec.Command("micro", m.tree.selectedNode.path)
+			if m.tree != nil && m.tree.SelectedNode != nil && m.tree.SelectedNode.Type == fstree.FileNode {
+				c := exec.Command("micro", m.tree.SelectedNode.Path)
 				c.Stdin = os.Stdin
 				c.Stdout = os.Stdout
 				c.Stderr = os.Stderr
 				return m, tea.ExecProcess(c, func(err error) tea.Msg {
 					// mouse loses focus so this is neededd
-					return loadNote{path: m.tree.selectedNode.path, force: true}
+					return note.LoadNoteMsg{Path: m.tree.SelectedNode.Path, Force: true}
 				})
+			}
+		case "delete":
+			// Forward delete to fstree if focused (implied focus on tree for now when not editing)
+			if m.tree != nil {
+				_, cmd := m.tree.Update(msg)
+				return m, cmd
 			}
 		}
 
@@ -340,8 +331,8 @@ func (m model) View() string {
 	statusContent := ""
 	if m.inputMode {
 		statusContent = m.textInput.View()
-	} else if m.tree != nil && m.tree.errMsg != "" {
-		statusContent = lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Render(m.tree.errMsg)
+	} else if m.tree != nil && m.tree.ErrMsg != "" {
+		statusContent = lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Render(m.tree.ErrMsg)
 	}
 
 	statusBar := lipgloss.NewStyle().

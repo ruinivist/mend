@@ -1,4 +1,4 @@
-package main
+package filesystem
 
 import (
 	"os"
@@ -16,7 +16,7 @@ func TestCreateFile(t *testing.T) {
 
 	// test valid creation
 	filePath := filepath.Join(tmpDir, "test.md")
-	err = createFile(filePath, []byte("content"))
+	err = CreateFile(filePath, []byte("content"))
 	if err != nil {
 		t.Errorf("expected no error, got %v", err)
 	}
@@ -26,13 +26,13 @@ func TestCreateFile(t *testing.T) {
 	}
 
 	// test creation failure (exists)
-	err = createFile(filePath, []byte("content"))
+	err = CreateFile(filePath, []byte("content"))
 	if err == nil {
 		t.Error("expected error for existing file, got nil")
 	}
 
 	// test empty path
-	err = createFile("", []byte{})
+	err = CreateFile("", []byte{})
 	if err == nil {
 		t.Error("expected error for empty path, got nil")
 	}
@@ -47,7 +47,7 @@ func TestCreateFolder(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	folderPath := filepath.Join(tmpDir, "subfolder")
-	err = createFolder(folderPath)
+	err = CreateFolder(folderPath)
 	if err != nil {
 		t.Errorf("expected no error, got %v", err)
 	}
@@ -61,13 +61,13 @@ func TestCreateFolder(t *testing.T) {
 	}
 
 	// test creation failure (exists)
-	err = createFolder(folderPath)
+	err = CreateFolder(folderPath)
 	if err == nil {
 		t.Error("expected error for existing folder, got nil")
 	}
 
 	// test empty path
-	err = createFolder("")
+	err = CreateFolder("")
 	if err == nil {
 		t.Error("expected error for empty path, got nil")
 	}
@@ -86,7 +86,7 @@ func TestDeletePath(t *testing.T) {
 	fileInSubDir := filepath.Join(subDir, "file.txt")
 	os.WriteFile(fileInSubDir, []byte("data"), 0644)
 
-	err = deletePath(subDir)
+	err = DeletePath(subDir)
 	if err != nil {
 		t.Errorf("expected no error, got %v", err)
 	}
@@ -96,13 +96,13 @@ func TestDeletePath(t *testing.T) {
 	}
 
 	// test delete non-existent
-	err = deletePath(filepath.Join(tmpDir, "nonexistent"))
+	err = DeletePath(filepath.Join(tmpDir, "nonexistent"))
 	if err == nil {
 		t.Error("expected error for nonexistent path, got nil")
 	}
 
 	// test empty path
-	err = deletePath("")
+	err = DeletePath("")
 	if err == nil {
 		t.Error("expected error for empty path, got nil")
 	}
