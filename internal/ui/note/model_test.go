@@ -1,4 +1,4 @@
-package main
+package note
 
 import (
 	"reflect"
@@ -41,9 +41,9 @@ func TestExtractHints(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := extractHints(tt.content)
+			got := ExtractHints(tt.content)
 			if !reflect.DeepEqual(got, tt.expected) {
-				t.Errorf("extractHints() = %v, want %v", got, tt.expected)
+				t.Errorf("ExtractHints() = %v, want %v", got, tt.expected)
 			}
 		})
 	}
@@ -58,7 +58,7 @@ Content 1 with **hint1**.
 Content 2 with __hint2__.
 `)
 
-	sections := parseSections(content)
+	sections := ParseSections(content)
 
 	if len(sections) != 2 {
 		t.Fatalf("expected 2 sections, got %d", len(sections))
@@ -92,7 +92,7 @@ func TestParseSectionsNoHeaders(t *testing.T) {
 	content := []byte(`Just some content without any headers.
 It has **one hint**.`)
 
-	sections := parseSections(content)
+	sections := ParseSections(content)
 
 	if len(sections) != 1 {
 		t.Fatalf("expected 1 section, got %d", len(sections))

@@ -1,4 +1,4 @@
-package main
+package fstree
 
 import (
 	"os"
@@ -29,12 +29,12 @@ func TestNewFsTree(t *testing.T) {
 	if tree == nil {
 		t.Fatal("expected tree to be created, got nil")
 	}
-	if tree.root.path != tmpDir {
-		t.Errorf("expected root path %s, got %s", tmpDir, tree.root.path)
+	if tree.Root.Path != tmpDir {
+		t.Errorf("expected root path %s, got %s", tmpDir, tree.Root.Path)
 	}
 	// root children: folder1, file2.md
-	if len(tree.root.children) != 2 {
-		t.Errorf("expected 2 children, got %d", len(tree.root.children))
+	if len(tree.Root.Children) != 2 {
+		t.Errorf("expected 2 children, got %d", len(tree.Root.Children))
 	}
 }
 
@@ -48,7 +48,7 @@ func TestTreeCreateNode(t *testing.T) {
 
 	tree := NewFsTree(tmpDir, 0)
 	// create folder
-	err = tree.CreateNode(tree.root, "new_folder", FolderNode)
+	err = tree.CreateNode(tree.Root, "new_folder", FolderNode)
 	if err != nil {
 		t.Errorf("expected no error creating folder, got %v", err)
 	}
@@ -57,12 +57,12 @@ func TestTreeCreateNode(t *testing.T) {
 		t.Error("folder not created on fs")
 	}
 	// check tree
-	if len(tree.root.children) != 1 || tree.root.children[0].nodeType != FolderNode {
+	if len(tree.Root.Children) != 1 || tree.Root.Children[0].Type != FolderNode {
 		t.Error("tree block not updated with new folder")
 	}
 
 	// create file in new folder
-	newFolder := tree.root.children[0]
+	newFolder := tree.Root.Children[0]
 	err = tree.CreateNode(newFolder, "new_file", FileNode)
 	if err != nil {
 		t.Errorf("expected no error creating file, got %v", err)
@@ -73,7 +73,7 @@ func TestTreeCreateNode(t *testing.T) {
 		t.Error("file not created on fs")
 	}
 	// check tree
-	if len(newFolder.children) != 1 || newFolder.children[0].nodeType != FileNode {
+	if len(newFolder.Children) != 1 || newFolder.Children[0].Type != FileNode {
 		t.Error("tree node not updated with new file")
 	}
 }
@@ -90,7 +90,7 @@ func TestTreeDeleteNode(t *testing.T) {
 	os.WriteFile(filepath.Join(tmpDir, "file.md"), []byte(""), 0644)
 
 	tree := NewFsTree(tmpDir, 0)
-	targetNode := tree.root.children[0]
+	targetNode := tree.Root.Children[0]
 
 	err = tree.DeleteNode(targetNode)
 	if err != nil {
@@ -102,7 +102,7 @@ func TestTreeDeleteNode(t *testing.T) {
 		t.Error("file not deleted from fs")
 	}
 	// check tree
-	if len(tree.root.children) != 0 {
+	if len(tree.Root.Children) != 0 {
 		t.Error("tree node not updated after deletion")
 	}
 }
@@ -110,30 +110,30 @@ func TestTreeDeleteNode(t *testing.T) {
 // tests toggling expand
 func TestTreeToggleExpand(t *testing.T) {
 	root := &FsNode{
-		nodeType: FolderNode,
-		expanded: true,
-		children: []*FsNode{}, // Initialize children
+		Type:     FolderNode,
+		Expanded: true,
+		Children: []*FsNode{}, // Initialize children
 	}
 
 	node := &FsNode{
-		nodeType: FolderNode,
-		expanded: true,
-		parent:   root,
+		Type:     FolderNode,
+		Expanded: true,
+		Parent:   root,
 	}
-	root.children = append(root.children, node)
+	root.Children = append(root.Children, node)
 
 	// mocked tree for this test
 	tree := &FsTree{
-		root: root,
+		Root: root,
 	}
 	// Initial buildLines to setup state
-	tree.buildLines()
+	tree.BuildLines()
 
 	err := tree.ToggleExpand(node)
 	if err != nil {
 		t.Error(err)
 	}
-	if node.expanded {
+	if node.Expanded {
 		t.Error("expected node to be collapsed")
 	}
 
@@ -141,7 +141,7 @@ func TestTreeToggleExpand(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	if !node.expanded {
+	if !node.Expanded {
 		t.Error("expected node to be expanded")
 	}
 }
