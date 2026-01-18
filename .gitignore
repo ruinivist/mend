@@ -1,7 +1,7 @@
 .vscode
-.gemini
 prompts
 mend
 __debug*
 sample
 bin
+GEMINI.md
