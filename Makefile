@@ -1,7 +1,8 @@
-.PHONY: build test run clean
+.PHONY: build test run clean scaffold
 
 BINARY_NAME=mend
 BUILD_DIR=bin
+DATA_DIR=test_data
 
 build:
 	@mkdir -p $(BUILD_DIR)
@@ -10,8 +11,14 @@ build:
 test:
 	go test ./...
 
-run:
-	go run .
+scaffold:
+	./scripts/scaffold_data.sh
+
+run: scaffold
+	go run . $(DATA_DIR)
 
 clean:
 	rm -rf $(BUILD_DIR)
+
+clean-data:
+	rm -rf $(DATA_DIR)
