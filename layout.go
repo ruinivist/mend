@@ -2,7 +2,6 @@ package main
 
 // layout constants
 const (
-	minFsTreeWidth     = 5
 	minNoteViewWidth   = 10
 	dividerWidth       = 1
 	dragHitArea        = 2 // +/- chars around divider
@@ -11,9 +10,9 @@ const (
 	fsTreeWidthPercent = 15
 )
 
-// calculateLayout computes the widths for the file tree and note view
+// getUpdatedWindowSizes computes the widths for the file tree and note view
 // based on the terminal dimensions and the desired tree width.
-func calculateLayout(totalWidth, requestedTreeWidth int) (treeWidth, noteWidth int) {
+func getUpdatedWindowSizes(totalWidth, requestedTreeWidth, minTreeWidth int) (treeWidth, noteWidth int) {
 	treeWidth = requestedTreeWidth
 
 	if treeWidth == 0 {
@@ -26,8 +25,9 @@ func calculateLayout(totalWidth, requestedTreeWidth int) (treeWidth, noteWidth i
 	if treeWidth > maxTreeWidth {
 		treeWidth = maxTreeWidth
 	}
-	if treeWidth < minFsTreeWidth {
-		treeWidth = minFsTreeWidth
+
+	if treeWidth < minTreeWidth {
+		treeWidth = minTreeWidth
 	}
 
 	noteWidth = max(0, totalWidth-treeWidth-dividerWidth)
