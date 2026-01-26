@@ -4,3 +4,6 @@ __debug*
 sample
 bin
 GEMINI.md
+
+# make scaffold generates it so no need to commit
+test_data/
