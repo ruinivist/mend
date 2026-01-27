@@ -73,18 +73,23 @@ type PerformActionMsg struct {
 
 // ==================== FsNode definition ====================
 type FsTree struct {
-	Root         *FsNode
-	lines        map[int]*FsNode // flattened view of nodes for easy line access, map so that I can handle blank padding
-	SelectedNode *FsNode
-	hoveredNode  *FsNode
-	ErrMsg       string
-	height       int
-	width        int
-	viewStart    int
-	viewEnd      int
-	totalLines   int
-	oldSelected  *FsNode
-	startOffset  int
+	Root            *FsNode
+	lines           map[int]*FsNode // flattened view of nodes for easy line access, map so that I can handle blank padding
+	SelectedNode    *FsNode
+	hoveredNode     *FsNode
+	ErrMsg          string
+	height          int
+	width           int
+	viewStart       int
+	viewEnd         int
+	totalLines      int
+	oldSelected     *FsNode
+	startOffset     int
+	maxContentWidth int
+}
+
+func (t *FsTree) ContentWidth() int {
+	return t.maxContentWidth
 }
 
 // ==================== Bubble Tea Interface Implementation ====================
@@ -92,13 +97,18 @@ func (t *FsTree) Init() tea.Cmd {
 	return nil
 }
 
+type ContentSizeChangeMsg struct{}
+
 func (t *FsTree) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch m := msg.(type) {
 	case PerformActionMsg:
 		err := t.PerformAction(m.Action, m.Name)
 		if err != nil {
 			t.ErrMsg = err.Error()
+			return t, nil
 		}
+		// todo: standardise these messages
+		return t, func() tea.Msg { return ContentSizeChangeMsg{} }
 	case tea.WindowSizeMsg:
 		t.width = m.Width
 		t.height = m.Height
@@ -446,6 +456,7 @@ func (t *FsTree) renderNode(node *FsNode, depth int, builder *strings.Builder) {
 
 // builds a cache of line num to rendered node in view
 func (t *FsTree) BuildLines() {
+	t.maxContentWidth = 0
 	t.lines = make(map[int]*FsNode)
 	line := -1
 	flatTree := make([]*FsNode, 0)
@@ -461,7 +472,7 @@ func (t *FsTree) BuildLines() {
 	}
 }
 
-// Deprecated: isn't meant to be used directly
+// isn't meant to be used directly
 func (t *FsTree) buildLinesRec(node *FsNode, depth int, currentLine *int, flatTree *[]*FsNode) {
 	if node == nil {
 		return
@@ -474,6 +485,14 @@ func (t *FsTree) buildLinesRec(node *FsNode, depth int, currentLine *int, flatTr
 	node.line = *currentLine
 	*flatTree = append(*flatTree, node)
 	(*currentLine)++
+
+	// update max width
+	if depth > 0 {
+		w := depth + 2 + len(node.FileName())
+		if w > t.maxContentWidth {
+			t.maxContentWidth = w
+		}
+	}
 
 	if node.Expanded {
 		for _, child := range node.Children {
@@ -539,6 +558,7 @@ func (t *FsTree) CreateNode(folder *FsNode, name string, nodeType FsNodeType) er
 	}
 	t.SelectedNode = newNode
 	t.BuildLines()
+
 	return nil
 }
 
