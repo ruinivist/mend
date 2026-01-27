@@ -109,6 +109,10 @@ func (t *FsTree) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			_ = t.MoveUp()
 		case "s", "down":
 			_ = t.MoveDown()
+		case "pgup":
+			_ = t.MovePgUp()
+		case "pgdown":
+			_ = t.MovePgDown()
 		case "e", "space":
 			_ = t.ToggleSelectedExpand()
 		case "n": // new file
@@ -308,6 +312,71 @@ func (t *FsTree) move(delta int) error {
 
 func (t *FsTree) MoveUp() error   { return t.move(-1) }
 func (t *FsTree) MoveDown() error { return t.move(1) }
+
+func (t *FsTree) MovePgUp() error {
+	if t.SelectedNode == nil || t.Root == nil {
+		// TODO: make these errors not string based
+		// again, not expected
+		return errors.New("no node is currently selected or root is nil")
+	}
+
+	// Find the ancestor that is a direct child of Root
+	curr := t.SelectedNode
+	for curr.Parent != nil && curr.Parent != t.Root {
+		curr = curr.Parent
+	}
+
+	if curr.Parent != t.Root {
+		// shoudl not happen
+		return errors.New("selected node is not a direct child of root")
+	}
+
+	// Find index of curr in Root.Children
+	idx := -1
+	for i, child := range t.Root.Children {
+		if child == curr {
+			idx = i
+			break
+		}
+	}
+
+	if idx > 0 {
+		t.SelectedNode = t.Root.Children[idx-1]
+	}
+
+	return nil
+}
+
+func (t *FsTree) MovePgDown() error {
+	if t.SelectedNode == nil || t.Root == nil {
+		return errors.New("no node is currently selected or root is nil")
+	}
+
+	// up till root
+	curr := t.SelectedNode
+	for curr.Parent != nil && curr.Parent != t.Root {
+		curr = curr.Parent
+	}
+
+	if curr.Parent != t.Root {
+		return errors.New("selected node is not a direct child of root")
+	}
+
+	// Find index of curr in Root.Children
+	idx := -1
+	for i, child := range t.Root.Children {
+		if child == curr {
+			idx = i
+			break
+		}
+	}
+
+	if idx < len(t.Root.Children)-1 {
+		t.SelectedNode = t.Root.Children[idx+1]
+	}
+
+	return nil
+}
 
 func (t *FsTree) ToggleSelectedExpand() error {
 	if t.SelectedNode == nil {
