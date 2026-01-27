@@ -36,9 +36,9 @@ type FsNode struct {
 	Parent   *FsNode // for fast traversal up the tree
 	Expanded bool    // makes sense only for folder nodes
 	// these are populated by BuildLines for fast access
-	line int
-	prev *FsNode
-	next *FsNode
+	line         int
+	prevFlatNode *FsNode
+	nextFlatNode *FsNode
 }
 
 func (n *FsNode) FileName() string {
@@ -258,7 +258,7 @@ func (t *FsTree) DeleteNode(node *FsNode) error {
 		return err
 	}
 
-	t.SelectedNode = node.prev // cannot be next as subfolder/file deletion
+	t.SelectedNode = node.prevFlatNode // cannot be next as subfolder/file deletion
 	parent.Children = utils.RemoveFromSlice(parent.Children, node)
 
 	if t.SelectedNode == nil {
@@ -296,9 +296,9 @@ func (t *FsTree) move(delta int) error {
 
 	var next *FsNode
 	if delta == 1 {
-		next = selected.next
+		next = selected.nextFlatNode
 	} else {
-		next = selected.prev
+		next = selected.prevFlatNode
 	}
 	if next != nil {
 		t.SelectedNode = next
@@ -327,7 +327,7 @@ func (t *FsTree) renderNode(node *FsNode, depth int, builder *strings.Builder) {
 	}
 
 	folderInRoot := false
-	if node.Type == FolderNode && depth == 1 && node.prev != nil {
+	if node.Type == FolderNode && depth == 1 && node.prevFlatNode != nil {
 		folderInRoot = true
 	}
 
@@ -387,8 +387,8 @@ func (t *FsTree) BuildLines() {
 	t.totalLines = line
 
 	for i := 1; i < len(flatTree)-1; i++ {
-		flatTree[i].prev = flatTree[i-1]
-		flatTree[i].next = flatTree[i+1]
+		flatTree[i].prevFlatNode = flatTree[i-1]
+		flatTree[i].nextFlatNode = flatTree[i+1]
 	}
 }
 
