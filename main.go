@@ -32,6 +32,7 @@ type model struct {
 	isHoveringDivider bool
 	contentHeight     int
 	showStatusBar     bool
+	showSidebar       bool
 	// input handling
 	textInput     textinput.Model
 	inputMode     bool
@@ -48,6 +49,7 @@ func NewModel(rootPath string) *model {
 		loading:       true,
 		noteView:      note.NewNoteView(),
 		showStatusBar: false,
+		showSidebar:   true,
 		textInput:     ti,
 	}
 }
@@ -83,7 +85,12 @@ func (m *model) layout(width, height int) {
 	if m.tree != nil {
 		minW = m.tree.ContentWidth()
 	}
-	m.fsTreeWidth, m.noteViewWidth = getUpdatedWindowSizes(width, m.fsTreeWidth, minW)
+	if !m.showSidebar {
+		m.fsTreeWidth = 0
+		m.noteViewWidth = width
+	} else {
+		m.fsTreeWidth, m.noteViewWidth = getUpdatedWindowSizes(width, m.fsTreeWidth, minW)
+	}
 
 	h := height
 	if m.showStatusBar || m.inputMode {
@@ -216,6 +223,10 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "q", "ctrl+c":
 			return m, tea.Quit
+		case "ctrl+b":
+			m.showSidebar = !m.showSidebar
+			m.layout(m.terminalWidth, m.terminalHeight)
+			return m, m.resizeChildren()
 		case "i":
 			m.showStatusBar = !m.showStatusBar
 			m.layout(m.terminalWidth, m.terminalHeight)
@@ -329,12 +340,17 @@ func (m model) View() string {
 
 	notes := m.noteView.View()
 
-	full := lipgloss.JoinHorizontal(
-		lipgloss.Top,
-		tree,
-		divider,
-		notes,
-	)
+	var full string
+	if m.showSidebar {
+		full = lipgloss.JoinHorizontal(
+			lipgloss.Top,
+			tree,
+			divider,
+			notes,
+		)
+	} else {
+		full = notes
+	}
 
 	if !m.showStatusBar && !m.inputMode {
 		return full
