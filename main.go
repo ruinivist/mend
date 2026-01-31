@@ -5,8 +5,10 @@ import (
 	"os"
 	"os/exec"
 
+	"mend/internal/search"
 	"mend/internal/ui/fstree"
 	"mend/internal/ui/note"
+	uisearch "mend/internal/ui/search"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -37,12 +39,18 @@ type model struct {
 	textInput     textinput.Model
 	inputMode     bool
 	pendingAction fstree.FsActionType
+	// search
+	searchEngine *search.SearchEngine
+	searchView   *uisearch.SearchView
+	searchMode   bool
 }
 
 func NewModel(rootPath string) *model {
 	ti := textinput.New()
 	ti.CharLimit = 156
 	ti.Width = 30
+
+	searchEngine := search.NewSearchEngine()
 
 	return &model{
 		rootPath:      rootPath,
@@ -51,6 +59,8 @@ func NewModel(rootPath string) *model {
 		showStatusBar: false,
 		showSidebar:   true,
 		textInput:     ti,
+		searchEngine:  searchEngine,
+		searchView:    uisearch.NewSearchView(searchEngine),
 	}
 }
 
@@ -137,7 +147,24 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			Height: m.contentHeight,
 			Width:  m.fsTreeWidth,
 		})
+		// Start background indexing
+		indexCmd := search.StartIndexing(m.searchEngine, m.tree.Root.Path)
+		return m, tea.Batch(cmd, indexCmd)
+
+	case uisearch.SearchSelectMsg:
+		m.searchMode = false
+		if msg.IsFolder {
+			if m.tree != nil {
+				m.tree.SelectByPath(msg.Path)
+			}
+			return m, nil
+		}
+		_, cmd := m.noteView.Update(note.LoadNoteMsg{Path: msg.Path})
 		return m, cmd
+
+	case uisearch.SearchCancelMsg:
+		m.searchMode = false
+		return m, nil
 
 	case fstree.NodeSelectedMsg:
 		// Forward node selection to noteView
@@ -214,6 +241,12 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 
+		// search mode, forward all keys to search view
+		if m.searchMode {
+			_, cmd := m.searchView.Update(msg)
+			return m, cmd
+		}
+
 		// If editing, forward all keys to noteView and ignore global bindings
 		if m.noteView.IsEditing() {
 			_, cmd := m.noteView.Update(msg)
@@ -223,6 +256,14 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "q", "ctrl+c":
 			return m, tea.Quit
+		case "ctrl+f", "ctrl+p":
+			m.searchMode = true
+			_, cmd := m.searchView.Update(tea.WindowSizeMsg{
+				Width:  m.terminalWidth,
+				Height: m.terminalHeight,
+			})
+			activateCmd := m.searchView.Activate()
+			return m, tea.Batch(cmd, activateCmd)
 		case "ctrl+b":
 			m.showSidebar = !m.showSidebar
 			m.layout(m.terminalWidth, m.terminalHeight)
@@ -308,6 +349,13 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m model) View() string {
 	if m.loading {
 		return "Loading files..."
+	}
+
+	// Search mode takes over the entire screen
+	// bubbletea has no good "overaly stuff"
+	// I made a compositor but let's not use it for now
+	if m.searchMode {
+		return m.searchView.View()
 	}
 
 	tree := m.tree.View()
