@@ -14,7 +14,7 @@
                 "--accept-multiclient",
                 ".",
                 "--",
-                "sample"
+                "test_data"
             ],
             "isBackground": true,
             "problemMatcher": {
