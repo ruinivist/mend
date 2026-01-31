@@ -39,8 +39,8 @@ const (
 type NoteView struct {
 	// the actual content
 	Path                string
-	rawContent          string // full content for editing
-	sections            []Section
+	rawContent          string    // full content for editing
+	sections            []Section // number of BLOCKS (heading separated)
 	currentSectionIndex int
 	// display layer
 	err        error
@@ -325,60 +325,48 @@ func ExtractHints(content string) []string {
 }
 
 func (m NoteView) renderNote() string {
-	// TODO: this I need to refactor, too many branches
 	if m.Path == "" {
-		return "" // no note is loaded, don't need to bother with anything
-	}
-	var titleText, contentText string
-	if len(m.sections) > 0 {
-		titleText = m.sections[m.currentSectionIndex].Title
-		contentText = m.sections[m.currentSectionIndex].Content
-	} else {
-		contentText = m.rawContent
+		return ""
 	}
 
-	title, err1 := m.mdRenderer.Render(titleText)
-	if err1 != nil {
-		title = titleText + "\n\n"
+	section := Section{Content: m.rawContent} // default section if no sections are present
+	if m.currentSectionIndex < len(m.sections) {
+		section = m.sections[m.currentSectionIndex]
+	}
+
+	title, err := m.mdRenderer.Render(section.Title)
+	if err != nil {
+		title = section.Title + "\n\n"
 	}
 
 	var body string
-	var err2 error
+	isListStart := false
 
 	switch m.viewState {
+	case StateTitleOnly:
+		// no body
 	case StateContent:
-		body, err2 = m.mdRenderer.Render(contentText)
+		body, err = m.mdRenderer.Render(section.Content)
+		isListStart = strings.HasPrefix(section.Content, "-") || strings.HasPrefix(section.Content, "*")
 	case StateHints:
-		currentHints := []string{}
-		if m.currentSectionIndex < len(m.sections) {
-			currentHints = m.sections[m.currentSectionIndex].Hints
-		}
-
-		if len(currentHints) == 0 {
-			body, err2 = m.mdRenderer.Render("\nNo hints available.")
+		if len(section.Hints) == 0 {
+			body, err = m.mdRenderer.Render("\nNo hints available.")
 		} else {
-			// Format hints as a list
 			hintsList := ""
-			for _, h := range currentHints {
+			for _, h := range section.Hints {
 				hintsList += "- " + h + "\n"
 			}
-			body, err2 = m.mdRenderer.Render(hintsList)
+			body, err = m.mdRenderer.Render(hintsList)
+			isListStart = true
 		}
-	case StateTitleOnly:
-		body = "" // TOOD: there was a message here but I removed it, maybe remove enum entry as well
-		// or improve this part ui
 	}
 
-	if err2 != nil {
+	if err != nil {
 		return title + "\nError rendering content."
 	}
 
-	// HACK:
-	// bubbletea does not allow me to configure newlines on lists all that well (afaiu)
-	// so so I've removes all block level spacing and added a \n IFF the start is not a list
-	isListStart := m.viewState == StateHints && len(m.sections[m.currentSectionIndex].Hints) > 0 || m.viewState == StateContent && (strings.HasPrefix(contentText, "-") || strings.HasPrefix(contentText, "*"))
 	if !isListStart {
-		title = title + "\n"
+		title += "\n"
 	}
 
 	return title + body
