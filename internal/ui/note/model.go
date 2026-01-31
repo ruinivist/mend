@@ -65,22 +65,36 @@ type LoadedNote struct {
 	Err        error
 }
 
-func NewNoteView() *NoteView {
+func newMdRenderer() *glamour.TermRenderer {
+	// styling in glamour can be better, I would rather have a fluent style api here
+	// https://github.com/charmbracelet/glamour/issues/294
+	mdStyleConfig := glStyles.TokyoNightStyleConfig
+	var margin uint = 2
+	mdStyleConfig.Document.Margin = &margin
+	mdStyleConfig.Document.BlockPrefix = ""
+	mdStyleConfig.Document.BlockSuffix = ""
 	mdRenderer, _ := glamour.NewTermRenderer(
-		glamour.WithStylePath(glStyles.TokyoNightStyle),
+		glamour.WithStyles(mdStyleConfig),
 		glamour.WithWordWrap(80),
 	)
+	return mdRenderer
+}
+
+func newTextArea() textarea.Model {
 	ta := textarea.New()
 	ta.Focus()
 	ta.Prompt = ""
 	ta.ShowLineNumbers = false
+	return ta
+}
 
+func NewNoteView() *NoteView {
 	return &NoteView{
 		loading:    false,
-		mdRenderer: mdRenderer,
+		mdRenderer: newMdRenderer(),
 		vp:         viewport.New(0, 0),
 		viewState:  StateTitleOnly,
-		textarea:   ta,
+		textarea:   newTextArea(),
 	}
 }
 
@@ -311,6 +325,7 @@ func ExtractHints(content string) []string {
 }
 
 func (m NoteView) renderNote() string {
+	// TODO: this I need to refactor, too many branches
 	if m.Path == "" {
 		return "" // no note is loaded, don't need to bother with anything
 	}
@@ -340,7 +355,7 @@ func (m NoteView) renderNote() string {
 		}
 
 		if len(currentHints) == 0 {
-			body = "No hints available."
+			body, err2 = m.mdRenderer.Render("\nNo hints available.")
 		} else {
 			// Format hints as a list
 			hintsList := ""
@@ -356,6 +371,14 @@ func (m NoteView) renderNote() string {
 
 	if err2 != nil {
 		return title + "\nError rendering content."
+	}
+
+	// HACK:
+	// bubbletea does not allow me to configure newlines on lists all that well (afaiu)
+	// so so I've removes all block level spacing and added a \n IFF the start is not a list
+	isListStart := m.viewState == StateHints && len(m.sections[m.currentSectionIndex].Hints) > 0 || m.viewState == StateContent && (strings.HasPrefix(contentText, "-") || strings.HasPrefix(contentText, "*"))
+	if !isListStart {
+		title = title + "\n"
 	}
 
 	return title + body
