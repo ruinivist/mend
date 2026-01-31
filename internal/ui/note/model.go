@@ -69,7 +69,7 @@ func newMdRenderer() *glamour.TermRenderer {
 	// styling in glamour can be better, I would rather have a fluent style api here
 	// https://github.com/charmbracelet/glamour/issues/294
 	mdStyleConfig := glStyles.TokyoNightStyleConfig
-	var margin uint = 2
+	var margin uint = 4
 	mdStyleConfig.Document.Margin = &margin
 	mdStyleConfig.Document.BlockPrefix = ""
 	mdStyleConfig.Document.BlockSuffix = ""
@@ -369,5 +369,5 @@ func (m NoteView) renderNote() string {
 		title += "\n"
 	}
 
-	return title + body
+	return "\n\n" + title + body
 }
