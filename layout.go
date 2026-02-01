@@ -13,6 +13,9 @@ const (
 // getUpdatedWindowSizes computes the widths for the file tree and note view
 // based on the terminal dimensions and the desired tree width.
 func getUpdatedWindowSizes(totalWidth, requestedTreeWidth, minTreeWidth int) (treeWidth, noteWidth int) {
+	// hack on next line, it's not quite correct and I won't investigate rn
+	minTreeWidth = minTreeWidth + 3
+
 	treeWidth = requestedTreeWidth
 
 	if treeWidth == 0 {
