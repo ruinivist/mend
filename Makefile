@@ -1,4 +1,4 @@
-.PHONY: build test run clean scaffold
+.PHONY: build test dev clean scaffold
 
 BINARY_NAME=mend
 BUILD_DIR=bin
@@ -14,7 +14,7 @@ test:
 scaffold:
 	./scripts/scaffold_data.sh
 
-run: scaffold
+dev: scaffold
 	go run . $(DATA_DIR)
 
 clean:
