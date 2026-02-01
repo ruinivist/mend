@@ -400,6 +400,42 @@ func (t *FsTree) ToggleSelectedExpand() error {
 	return nil
 }
 
+// SelectByPath finds and selects a node by its file system path
+func (t *FsTree) SelectByPath(path string) bool {
+	node := t.findNodeByPath(t.Root, path)
+	if node != nil {
+		// Expand all parent folders to make the node visible
+		parent := node.Parent
+		for parent != nil {
+			if parent.Type == FolderNode && !parent.Expanded {
+				parent.Expanded = true
+			}
+			parent = parent.Parent
+		}
+		t.SelectedNode = node
+		t.BuildLines()
+		return true
+	}
+	return false
+}
+
+// tree walks and find where patch matches, think can easily be better
+// if I cache it in an associative continer but this is fine too
+func (t *FsTree) findNodeByPath(node *FsNode, path string) *FsNode {
+	if node == nil {
+		return nil
+	}
+	if node.Path == path {
+		return node
+	}
+	for _, child := range node.Children {
+		if found := t.findNodeByPath(child, path); found != nil {
+			return found
+		}
+	}
+	return nil
+}
+
 func (t *FsTree) renderNode(node *FsNode, depth int, builder *strings.Builder) {
 	if node == nil {
 		return
