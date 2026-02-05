@@ -86,6 +86,14 @@ type FsTree struct {
 	oldSelected     *FsNode
 	startOffset     int
 	maxContentWidth int
+	ThreeColumnMode bool
+	page            int
+}
+
+const numColumns = 3
+
+func (t *FsTree) ToggleThreeColumnMode() {
+	t.ThreeColumnMode = !t.ThreeColumnMode
 }
 
 func (t *FsTree) ContentWidth() int {
@@ -113,6 +121,24 @@ func (t *FsTree) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		t.width = m.Width
 		t.height = m.Height
 	case tea.KeyMsg:
+		if t.ThreeColumnMode {
+			switch m.String() {
+			case "a":
+				t.changePage(-1)
+				return t, nil
+			case "d":
+				t.changePage(1)
+				return t, nil
+			case "left":
+				t.jumpColumn(-1)
+				return t, nil
+			case "right":
+				// We need to know max pages to cap this, but for now just let it go
+				// The view logic should handle out of bounds gracefully
+				t.jumpColumn(1)
+				return t, nil
+			}
+		}
 		t.ErrMsg = ""
 		switch m.String() {
 		case "w", "up":
@@ -149,6 +175,56 @@ func (t *FsTree) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		m.Y += t.viewStart - t.startOffset // adjust for viewport
+
+		if t.ThreeColumnMode {
+			// Calculate column width used in View
+			gapSize := 2
+			totalGapWidth := (numColumns - 1) * gapSize
+			colWidth := (t.width - totalGapWidth) / numColumns
+
+			// We can calculate colIndex directly from X arithmetic
+			// X = colIndex * (colWidth + gapSize) + offsetWithinColumn
+			// So colIndex ≈ X / (colWidth + gapSize)
+
+			stride := colWidth + gapSize
+			colIndex := m.X / stride
+
+			if colIndex >= numColumns {
+				// Out of bounds (right side margin?)
+				return t, nil
+			}
+
+			// Check if click is in the gap
+			offsetInStride := m.X % stride
+			if offsetInStride >= colWidth {
+				// In the gap
+				return t, nil
+			}
+
+			// Calculate line index
+			row := m.Y - t.viewStart
+			if row < 0 || row >= t.height {
+				return t, nil
+			}
+
+			perColumn := t.height
+			itemsPerPage := perColumn * numColumns
+
+			logicalLineIndex := (t.page * itemsPerPage) + (colIndex * perColumn) + row
+
+			nodeAtLine := t.lines[logicalLineIndex]
+			t.hoveredNode = nodeAtLine
+
+			if m.Button == tea.MouseButtonLeft && m.Action == tea.MouseActionPress {
+				if nodeAtLine != nil {
+					t.SelectedNode = nodeAtLine
+					if nodeAtLine.Type == FolderNode {
+						_ = t.ToggleExpand(nodeAtLine)
+					}
+				}
+			}
+			return t, nil
+		}
 		if m.X >= t.width {
 			break
 		}
@@ -224,9 +300,20 @@ func (t *FsTree) View() string {
 	t.renderNode(t.Root, 0, builder)
 	rendered := builder.String()
 
+	// trim last newline to avoid trailing empty string from Split
+	rendered = strings.TrimSuffix(rendered, "\n")
 	lines := strings.Split(rendered, "\n")
 
-	clampedLines := lines[t.viewStart:t.viewEnd]
+	if t.ThreeColumnMode {
+		return t.viewThreeColumn(lines)
+	}
+
+	// Normal View
+	if t.viewStart >= len(lines) {
+		t.viewStart = 0
+	}
+	end := min(t.viewEnd, len(lines))
+	clampedLines := lines[t.viewStart:end]
 	rendered = strings.Join(clampedLines, "\n")
 
 	rendered = lipgloss.NewStyle().
@@ -234,6 +321,75 @@ func (t *FsTree) View() string {
 		Render(rendered)
 
 	return rendered
+}
+
+func (t *FsTree) viewThreeColumn(allLines []string) string {
+	availableHeight := t.height
+
+	perColumn := availableHeight
+	perPage := perColumn * numColumns
+
+	// Ensure page is valid
+	if t.page < 0 {
+		t.page = 0
+	}
+
+	startIndex := t.page * perPage
+	if startIndex >= len(allLines) && len(allLines) > 0 {
+		// adjust page to be last page
+		t.page = (len(allLines) - 1) / perPage
+		startIndex = t.page * perPage
+	}
+
+	endIndex := min(startIndex+perPage, len(allLines))
+	pageLines := allLines[startIndex:endIndex]
+
+	// Split pageLines into N columns
+	columns := make([][]string, numColumns)
+	for i := range columns {
+		columns[i] = make([]string, 0)
+	}
+
+	for i, line := range pageLines {
+		colIndex := i / perColumn
+		if colIndex < numColumns {
+			columns[colIndex] = append(columns[colIndex], line)
+		}
+	}
+
+	// Helper to pad columns to full height
+	padColumn := func(cols []string) []string {
+		for len(cols) < perColumn {
+			cols = append(cols, "")
+		}
+		return cols
+	}
+
+	for i := range columns {
+		columns[i] = padColumn(columns[i])
+	}
+
+	gapSize := 2
+	totalGapWidth := (numColumns - 1) * gapSize
+	colWidth := (t.width - totalGapWidth) / numColumns
+	if colWidth < 1 {
+		colWidth = 1
+	}
+
+	style := lipgloss.NewStyle().Width(colWidth).MaxWidth(colWidth)
+
+	renderedCols := make([]string, numColumns)
+	for i, col := range columns {
+		renderedCols[i] = style.Render(strings.Join(col, "\n"))
+	}
+
+	finalRender := renderedCols[0]
+	gap := strings.Repeat(" ", gapSize)
+	for i := 1; i < numColumns; i++ {
+		finalRender = lipgloss.JoinHorizontal(lipgloss.Top, finalRender, gap, renderedCols[i])
+	}
+
+	return finalRender
 }
 
 // ==================== FsTree helper methods ====================
@@ -398,6 +554,54 @@ func (t *FsTree) ToggleSelectedExpand() error {
 
 	t.ToggleExpand(t.SelectedNode)
 	return nil
+}
+
+func (t *FsTree) changePage(delta int) {
+	perColumn := t.height
+	perPage := perColumn * numColumns
+	if perPage == 0 {
+		return
+	}
+
+	newPage := t.page + delta
+	if newPage < 0 {
+		newPage = 0
+	}
+
+	// Check max page
+	maxPage := (t.totalLines - 1) / perPage
+	if newPage > maxPage {
+		newPage = maxPage
+	}
+
+	if newPage != t.page {
+		t.page = newPage
+		// Update selection to first item on new page to keep context
+		firstIndex := t.page * perPage
+		if node, ok := t.lines[firstIndex]; ok {
+			t.SelectedNode = node
+		}
+	}
+}
+
+func (t *FsTree) jumpColumn(delta int) {
+	if t.SelectedNode == nil {
+		return
+	}
+
+	currentIndex := t.SelectedNode.line
+	perColumn := t.height
+
+	targetIndex := currentIndex + (delta * perColumn)
+
+	if target, ok := t.lines[targetIndex]; ok {
+		t.SelectedNode = target
+
+		perPage := perColumn * numColumns
+		if perPage > 0 {
+			t.page = targetIndex / perPage
+		}
+	}
 }
 
 // SelectByPath finds and selects a node by its file system path

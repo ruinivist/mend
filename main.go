@@ -40,9 +40,10 @@ type model struct {
 	inputMode     bool
 	pendingAction fstree.FsActionType
 	// search
-	searchEngine *search.SearchEngine
-	searchView   *uisearch.SearchView
-	searchMode   bool
+	searchEngine        *search.SearchEngine
+	searchView          *uisearch.SearchView
+	searchMode          bool
+	preFsTreeColumnMode int
 }
 
 func NewModel(rootPath string) *model {
@@ -94,6 +95,9 @@ func (m *model) layout(width, height int) {
 	if !m.showSidebar {
 		m.fsTreeWidth = 0
 		m.noteViewWidth = width
+	} else if m.tree != nil && m.tree.ThreeColumnMode {
+		m.fsTreeWidth = width
+		m.noteViewWidth = 0
 	} else {
 		m.fsTreeWidth, m.noteViewWidth = getUpdatedWindowSizes(width, m.fsTreeWidth)
 	}
@@ -279,6 +283,21 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return note.LoadNoteMsg{Path: m.tree.SelectedNode.Path, Force: true}
 				})
 			}
+		case "v":
+			if m.tree != nil {
+				m.tree.ToggleThreeColumnMode()
+				if m.tree.ThreeColumnMode {
+					// entering 3-column mode, save current width
+					m.preFsTreeColumnMode = m.fsTreeWidth
+				} else {
+					// exiting 3-column mode, restore width
+					if m.preFsTreeColumnMode > 0 {
+						m.fsTreeWidth = m.preFsTreeColumnMode
+					}
+				}
+				m.layout(m.terminalWidth, m.terminalHeight)
+				return m, m.resizeChildren()
+			}
 		case "delete":
 			// Forward delete to fstree if focused (implied focus on tree for now when not editing)
 			if m.tree != nil {
@@ -385,7 +404,9 @@ func (m model) View() string {
 	notes := m.noteView.View()
 
 	var full string
-	if m.showSidebar {
+	if m.tree != nil && m.tree.ThreeColumnMode {
+		full = tree
+	} else if m.showSidebar {
 		full = lipgloss.JoinHorizontal(
 			lipgloss.Top,
 			tree,
