@@ -89,7 +89,7 @@ type FsTree struct {
 }
 
 func (t *FsTree) ContentWidth() int {
-	return t.maxContentWidth
+	return t.maxContentWidth + 2 // 2 = some padding
 }
 
 // ==================== Bubble Tea Interface Implementation ====================
@@ -449,7 +449,10 @@ func (t *FsTree) renderNode(node *FsNode, depth int, builder *strings.Builder) {
 	indent := strings.Repeat(" ", depth)
 	prevIndent := strings.Repeat(" ", max(depth-1, 0))
 
+	baseWidth := 0 // without any lipgloss styling
+
 	var icon string
+	faintStyle := lipgloss.NewStyle().Faint(true)
 	switch node.Type {
 	case FolderNode:
 		if node.Expanded {
@@ -457,9 +460,11 @@ func (t *FsTree) renderNode(node *FsNode, depth int, builder *strings.Builder) {
 		} else {
 			icon = indent + styles.ArrowRightIcon
 		}
+		baseWidth = len(indent) + 1 // 1 for icon
 	case FileNode:
 		icon = styles.VerticalLine
-		icon = lipgloss.NewStyle().Faint(true).Render(prevIndent + icon + " ")
+		icon = faintStyle.Render(prevIndent + icon + " ")
+		baseWidth = len(prevIndent) + 2
 	}
 
 	// highlight if selected or hovered
@@ -467,6 +472,16 @@ func (t *FsTree) renderNode(node *FsNode, depth int, builder *strings.Builder) {
 	fileName := node.FileName()
 	isSelected := node == t.SelectedNode
 	isHovered := node == t.hoveredNode
+
+	// truncation calculation begins
+	baseWidth += len(fileName) + 1 // 1 for space, space after icon added ahead
+	if baseWidth > t.width-4 {
+		// 4 is for calculation buffer hack as I seem to be off by one
+		// so now I'll be off by 4 and call it padding
+		extra := baseWidth - t.width + 4
+		fileName = fileName[:len(fileName)-extra] + faintStyle.Render("...")
+	}
+	// truncation calculation ends
 
 	if isSelected {
 		fileName = lipgloss.NewStyle().Foreground(styles.Highlight).Bold(true).Render(fileName)
@@ -477,6 +492,7 @@ func (t *FsTree) renderNode(node *FsNode, depth int, builder *strings.Builder) {
 	line := icon + " " + fileName + "\n"
 
 	if depth > 0 {
+		// this is so that root level folders have a gap between them
 		if folderInRoot {
 			line = "\n" + line
 		}

@@ -8,14 +8,12 @@ const (
 	fsTreeStartOffset  = 0 // there's bug when this is not 0 and the terminal height is small; I don't want to bother
 	statusBarHeight    = 3
 	fsTreeWidthPercent = 15
+	minFsTreeWidth     = 20
 )
 
 // getUpdatedWindowSizes computes the widths for the file tree and note view
 // based on the terminal dimensions and the desired tree width.
-func getUpdatedWindowSizes(totalWidth, requestedTreeWidth, minTreeWidth int) (treeWidth, noteWidth int) {
-	// hack on next line, it's not quite correct and I won't investigate rn
-	minTreeWidth = minTreeWidth + 3
-
+func getUpdatedWindowSizes(totalWidth, requestedTreeWidth int) (treeWidth, noteWidth int) {
 	treeWidth = requestedTreeWidth
 
 	if treeWidth == 0 {
@@ -29,8 +27,8 @@ func getUpdatedWindowSizes(totalWidth, requestedTreeWidth, minTreeWidth int) (tr
 		treeWidth = maxTreeWidth
 	}
 
-	if treeWidth < minTreeWidth {
-		treeWidth = minTreeWidth
+	if treeWidth < minFsTreeWidth {
+		treeWidth = minFsTreeWidth
 	}
 
 	noteWidth = max(0, totalWidth-treeWidth-dividerWidth)

@@ -91,15 +91,11 @@ func (m *model) loadTreeCmd(path string) tea.Cmd {
 func (m *model) layout(width, height int) {
 	m.terminalWidth = width
 	m.terminalHeight = height
-	minW := 0
-	if m.tree != nil {
-		minW = m.tree.ContentWidth()
-	}
 	if !m.showSidebar {
 		m.fsTreeWidth = 0
 		m.noteViewWidth = width
 	} else {
-		m.fsTreeWidth, m.noteViewWidth = getUpdatedWindowSizes(width, m.fsTreeWidth, minW)
+		m.fsTreeWidth, m.noteViewWidth = getUpdatedWindowSizes(width, m.fsTreeWidth)
 	}
 
 	h := height
@@ -142,7 +138,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.tree = msg.tree
 		m.loading = false
 		m.fsTreeWidth = m.tree.ContentWidth()
-		m.fsTreeWidth, m.noteViewWidth = getUpdatedWindowSizes(m.terminalWidth, m.fsTreeWidth, m.tree.ContentWidth())
+		m.fsTreeWidth, m.noteViewWidth = getUpdatedWindowSizes(m.terminalWidth, m.fsTreeWidth)
 		_, cmd := m.tree.Update(tea.WindowSizeMsg{
 			Height: m.contentHeight,
 			Width:  m.fsTreeWidth,
@@ -191,7 +187,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case fstree.ContentSizeChangeMsg:
 		// layout update needed, sent when a new note is created
-		m.fsTreeWidth, m.noteViewWidth = getUpdatedWindowSizes(m.terminalWidth, m.tree.ContentWidth(), m.tree.ContentWidth())
+		m.fsTreeWidth, m.noteViewWidth = getUpdatedWindowSizes(m.terminalWidth, m.fsTreeWidth)
 		// TODO: this can be simplified a lot
 		return m, m.resizeChildren() // batches two updates
 
@@ -314,7 +310,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.isHoveringDivider = isHoveringDivider(msg.X, m.fsTreeWidth)
 
 			if m.isDragging {
-				m.fsTreeWidth, m.noteViewWidth = getUpdatedWindowSizes(m.terminalWidth, msg.X, m.tree.ContentWidth())
+				m.fsTreeWidth, m.noteViewWidth = getUpdatedWindowSizes(m.terminalWidth, msg.X)
 
 				// Update children with new sizes
 				return m, m.resizeChildren()
