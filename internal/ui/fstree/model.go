@@ -357,39 +357,64 @@ func (t *FsTree) viewThreeColumn(allLines []string) string {
 		}
 	}
 
-	// Helper to pad columns to full height
-	padColumn := func(cols []string) []string {
-		for len(cols) < perColumn {
-			cols = append(cols, "")
-		}
-		return cols
-	}
+	// Separator Logic
+	sepWidth := 1
+	totalSepWidth := (numColumns - 1) * sepWidth
 
-	for i := range columns {
-		columns[i] = padColumn(columns[i])
-	}
+	maxColWidth := max(1, (t.width-totalSepWidth)/numColumns)
 
-	gapSize := 2
-	totalGapWidth := (numColumns - 1) * gapSize
-	colWidth := (t.width - totalGapWidth) / numColumns
-	if colWidth < 1 {
-		colWidth = 1
-	}
+	desiredColWidth := t.maxContentWidth + 2
+	colWidth := min(desiredColWidth, maxColWidth)
+	colWidth = max(colWidth, 20)
 
-	style := lipgloss.NewStyle().Width(colWidth).MaxWidth(colWidth)
+	// padding
+	totalContentWidth := (numColumns * colWidth) + totalSepWidth
+	availablePadding := t.width - totalContentWidth
+
+	// unit col1 unit/2 separator unit/2 ...
+	paddingUnit := max(0, availablePadding/(numColumns+1))
+	halfPaddingUnit := paddingUnit / 2
+
+	// separator column (80% height, centered vertically)
+	sepHeight := int(float64(perColumn) * 0.8)
+
+	// Create separator lines and join vertically
+	sepLines := make([]string, sepHeight)
+	for i := range sepLines {
+		sepLines[i] = styles.VerticalLine
+	}
+	sepStyle := lipgloss.NewStyle().Foreground(styles.FolderBlue)
+	renderedSep := lipgloss.PlaceVertical(perColumn, lipgloss.Center, sepStyle.Render(lipgloss.JoinVertical(lipgloss.Left, sepLines...)))
+
+	// Pre-render columns with base width and height
+	baseStyle := lipgloss.NewStyle().Width(colWidth).MaxWidth(colWidth).Height(perColumn)
 
 	renderedCols := make([]string, numColumns)
 	for i, col := range columns {
-		renderedCols[i] = style.Render(strings.Join(col, "\n"))
+		str := baseStyle.Render(lipgloss.JoinVertical(lipgloss.Left, col...))
+
+		var colStyle lipgloss.Style
+		if i == 0 {
+			colStyle = lipgloss.NewStyle().PaddingLeft(paddingUnit).PaddingRight(halfPaddingUnit)
+		} else if i == numColumns-1 {
+			colStyle = lipgloss.NewStyle().PaddingLeft(halfPaddingUnit).PaddingRight(paddingUnit)
+		} else {
+			colStyle = lipgloss.NewStyle().PaddingLeft(halfPaddingUnit).PaddingRight(halfPaddingUnit)
+		}
+
+		renderedCols[i] = colStyle.Render(str)
 	}
 
-	finalRender := renderedCols[0]
-	gap := strings.Repeat(" ", gapSize)
-	for i := 1; i < numColumns; i++ {
-		finalRender = lipgloss.JoinHorizontal(lipgloss.Top, finalRender, gap, renderedCols[i])
+	// Interleave columns with separators: col0, sep, col1, sep, col2...
+	joinParts := make([]string, 0, numColumns*2-1)
+	for i, col := range renderedCols {
+		if i > 0 {
+			joinParts = append(joinParts, renderedSep)
+		}
+		joinParts = append(joinParts, col)
 	}
 
-	return finalRender
+	return lipgloss.JoinHorizontal(lipgloss.Top, joinParts...)
 }
 
 // ==================== FsTree helper methods ====================
