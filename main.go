@@ -258,10 +258,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			})
 			activateCmd := m.searchView.Activate()
 			return m, tea.Batch(cmd, activateCmd)
-		case "ctrl+b":
-			m.showSidebar = !m.showSidebar
-			m.layout(m.terminalWidth, m.terminalHeight)
-			return m, m.resizeChildren()
+
 		case "i":
 			m.showStatusBar = !m.showStatusBar
 			m.layout(m.terminalWidth, m.terminalHeight)
