@@ -11,7 +11,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/textarea"
+
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/glamour"
@@ -48,9 +48,7 @@ type NoteView struct {
 	vp         viewport.Model
 	mdRenderer *glamour.TermRenderer
 	viewState  ViewState
-	// editing
-	textarea  textarea.Model
-	isEditing bool
+
 }
 
 // ================== messages ===================
@@ -80,13 +78,7 @@ func newMdRenderer() *glamour.TermRenderer {
 	return mdRenderer
 }
 
-func newTextArea() textarea.Model {
-	ta := textarea.New()
-	ta.Focus()
-	ta.Prompt = ""
-	ta.ShowLineNumbers = false
-	return ta
-}
+
 
 func NewNoteView() *NoteView {
 	return &NoteView{
@@ -94,47 +86,27 @@ func NewNoteView() *NoteView {
 		mdRenderer: newMdRenderer(),
 		vp:         viewport.New(0, 0),
 		viewState:  StateTitleOnly,
-		textarea:   newTextArea(),
 	}
 }
 
 func (m *NoteView) Init() tea.Cmd {
-	return textarea.Blink
+	return nil
 }
 
-func (m *NoteView) IsEditing() bool {
-	return m.isEditing
-}
+
 
 func (m *NoteView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.vp.Width = msg.Width
 		m.vp.Height = msg.Height - 1
-		m.textarea.SetWidth(msg.Width)
-		m.textarea.SetHeight(msg.Height)
 		return m, nil
 
 	case tea.KeyMsg:
-		if m.isEditing {
-			switch msg.String() {
-			case "esc", "ctrl+q":
-				m.isEditing = false
-				return m, saveContent(m.Path, m.textarea.Value())
-			}
-			var cmd tea.Cmd
-			m.textarea, cmd = m.textarea.Update(msg)
-			return m, cmd
-		}
+
 
 		switch msg.String() {
-		case "enter":
-			if m.Path != "" && !m.loading {
-				m.isEditing = true
-				m.textarea.SetValue(m.rawContent)
-				m.textarea.Focus()
-				return m, textarea.Blink
-			}
+
 		case " ":
 			switch m.viewState {
 			case StateTitleOnly:
@@ -175,7 +147,6 @@ func (m *NoteView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil //noop
 		}
 		m.Path = msg.Path
-		m.isEditing = false
 		m.loading = true
 		m.currentSectionIndex = 0
 		return m, fetchContent(msg.Path)
@@ -192,9 +163,7 @@ func (m *NoteView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.MouseMsg:
-		if m.isEditing {
-			return m, nil // or handle mouse in textarea if supported
-		}
+
 		var cmd tea.Cmd
 		m.vp, cmd = m.vp.Update(msg)
 		return m, cmd
@@ -214,9 +183,7 @@ func (m NoteView) View() string {
 		return "Error: " + m.err.Error()
 	}
 
-	if m.isEditing {
-		return m.textarea.View()
-	}
+
 
 	page := m.currentSectionIndex + 1
 	total := len(m.sections)
@@ -300,15 +267,7 @@ func ParseSections(source []byte) []Section {
 	return sections
 }
 
-func saveContent(path, content string) tea.Cmd {
-	return func() tea.Msg {
-		err := os.WriteFile(path, []byte(content), 0644)
-		if err != nil {
-			return LoadedNote{Err: err}
-		}
-		return fetchContent(path)()
-	}
-}
+
 
 func ExtractHints(content string) []string {
 	re := regexp.MustCompile(`(?s)\*\*(.*?)\*\*|__(.*?)__`)
